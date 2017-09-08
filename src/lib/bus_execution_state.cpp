@@ -30,29 +30,6 @@ namespace bus
 
 namespace
 {
-    std::string DataTypeName(coral::model::DataType dt)
-    {
-        switch (dt) {
-            case coral::model::REAL_DATATYPE:    return "real";
-            case coral::model::INTEGER_DATATYPE: return "integer";
-            case coral::model::BOOLEAN_DATATYPE: return "boolean";
-            case coral::model::STRING_DATATYPE:  return "string";
-        }
-        return std::string();
-    }
-
-    std::string CausalityName(coral::model::Causality c)
-    {
-        switch (c) {
-            case coral::model::PARAMETER_CAUSALITY:            return "parameter";
-            case coral::model::CALCULATED_PARAMETER_CAUSALITY: return "calculated parameter";
-            case coral::model::INPUT_CAUSALITY:                return "input";
-            case coral::model::OUTPUT_CAUSALITY:               return "output";
-            case coral::model::LOCAL_CAUSALITY:                return "local";
-        }
-        return std::string();
-    }
-
     void VerifyDataTypeMatch(
         coral::model::DataType expected,
         coral::model::DataType actual,
@@ -64,8 +41,8 @@ namespace
             std::stringstream sst;
             sst << "Failed to " << action << ' ' << slaveName << '.' << varName
                 << " due to data type mismatch. Expected: "
-                << DataTypeName(expected) << ". Actual: "
-                << DataTypeName(actual);
+                << coral::model::DataTypeName(expected) << ". Actual: "
+                << coral::model::DataTypeName(actual);
             throw std::runtime_error(sst.str());
         }
     }
@@ -88,8 +65,8 @@ namespace
         std::stringstream sst;
         sst << "Failed to connect " << slaveName << '.' << varName
             << " due to causality incompatibility. Cannot make a connection from a variable with causality \""
-            << CausalityName(outputCausality) << "\" to a variable with causality \""
-            << CausalityName(inputCausality) << '"';
+            << coral::model::CausalityName(outputCausality) << "\" to a variable with causality \""
+            << coral::model::CausalityName(inputCausality) << '"';
         throw std::runtime_error(sst.str());
     }
 

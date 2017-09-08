@@ -21,6 +21,33 @@ namespace model
 // Free functions
 // =============================================================================
 
+std::string DataTypeName(DataType dt)
+{
+    switch (dt) {
+        case coral::model::REAL_DATATYPE:    return "real";
+        case coral::model::INTEGER_DATATYPE: return "integer";
+        case coral::model::BOOLEAN_DATATYPE: return "boolean";
+        case coral::model::STRING_DATATYPE:  return "string";
+    }
+    assert(!"case statement missing");
+    return std::string();
+}
+
+
+std::string CausalityName(Causality c)
+{
+    switch (c) {
+        case coral::model::PARAMETER_CAUSALITY:            return "parameter";
+        case coral::model::CALCULATED_PARAMETER_CAUSALITY: return "calculated parameter";
+        case coral::model::INPUT_CAUSALITY:                return "input";
+        case coral::model::OUTPUT_CAUSALITY:               return "output";
+        case coral::model::LOCAL_CAUSALITY:                return "local";
+    }
+    assert(!"case statement missing");
+    return std::string();
+}
+
+
 namespace
 {
     class DataTypeOfVisitor : public boost::static_visitor<DataType>

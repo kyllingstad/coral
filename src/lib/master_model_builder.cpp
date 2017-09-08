@@ -1,0 +1,260 @@
+#include <coral/master/model_builder.hpp>
+
+#include <cassert>
+
+
+namespace coral
+{
+namespace master
+{
+
+
+namespace
+{
+    struct CachedSlaveType
+    {
+        explicit CachedSlaveType(const coral::model::SlaveTypeDescription& d)
+            : description(d)
+        {
+            for (const auto& v : description.Variables()) {
+                variables.insert(std::make_pair(v.Name(), &v));
+            }
+        }
+
+        coral::model::SlaveTypeDescription description;
+        std::unordered_map<std::string, const coral::model::VariableDescription*> variables;
+    };
+
+
+    std::string ConnectionErrMsg(
+        const std::string& sourceSlaveName,
+        const std::string& sourceVariableName,
+        const std::string& targetSlaveName,
+        const std::string& targetVariableName,
+        const std::string& details)
+    {
+        return "Cannot connect variable "
+            + sourceSlaveName + '.' + sourceVariableName + " to "
+            + targetSlaveName + '.' + targetVariableName + ": "
+            + details;
+    }
+
+
+    // Returns vacuously if `value` is a valid value for `variable`,
+    // otherwise throws an exception with an explanatory message.
+    // The slave name is only used in error messages.
+    void EnforceValidValue(
+        const std::string& slaveName,
+        const coral::model::VariableDescription& variable,
+        const coral::model::ScalarValue& value)
+    {
+        if (coral::model::DataTypeOf(value) != variable.DataType()) {
+            throw ModelConstructionException{
+                "Attempted to assign a value of type "
+                + coral::model::DataTypeName(coral::model::DataTypeOf(value))
+                + " to variable " + slaveName + '.' + variable.Name()
+                + " which has type "
+                + coral::model::DataTypeName(variable.DataType())};
+        }
+        // TODO: Check that value is within bounds. (VariableDescription
+        // does not currently have bounds information.)
+    }
+
+
+    // Returns vacuously if the specified connection is valid, otherwise
+    // throws an exception with an explanatory message.
+    // The slave name parameters are only used for error messages.
+    void EnforceValidConnection(
+        const std::string& sourceSlaveName,
+        const coral::model::VariableDescription& sourceVariable,
+        const std::string& targetSlaveName,
+        const coral::model::VariableDescription& targetVariable)
+    {
+        // Check causality
+        if (sourceVariable.Causality() == coral::model::OUTPUT_CAUSALITY) {
+            if (targetVariable.Causality() != coral::model::INPUT_CAUSALITY) {
+                throw ModelConstructionException{
+                    ConnectionErrMsg(
+                        sourceSlaveName, sourceVariable.Name(),
+                        targetSlaveName, targetVariable.Name(),
+                        "An output variable may only be connected to an input variable")};
+            }
+        } else if (sourceVariable.Causality() == coral::model::CALCULATED_PARAMETER_CAUSALITY) {
+            if (targetVariable.Causality() != coral::model::PARAMETER_CAUSALITY &&
+                targetVariable.Causality() != coral::model::INPUT_CAUSALITY) {
+                throw ModelConstructionException{
+                    ConnectionErrMsg(
+                        sourceSlaveName, sourceVariable.Name(),
+                        targetSlaveName, targetVariable.Name(),
+                        "A calculated parameter may only be connected to a parameter or input variable")};
+            }
+        } else {
+            throw ModelConstructionException{
+                ConnectionErrMsg(
+                    sourceSlaveName, sourceVariable.Name(),
+                    targetSlaveName, targetVariable.Name(),
+                    "Only output variables and calculated parameters may be used as sources in a connection")};
+        }
+
+        // Check data type
+        if (sourceVariable.DataType() != targetVariable.DataType()) {
+            throw ModelConstructionException{
+                ConnectionErrMsg(
+                    sourceSlaveName, sourceVariable.Name(),
+                    targetSlaveName, targetVariable.Name(),
+                    "A variable of type "
+                        + coral::model::DataTypeName(sourceVariable.DataType())
+                        + " cannot be connected to a variable of type "
+                        + coral::model::DataTypeName(targetVariable.DataType()))};
+        }
+    }
+}
+
+
+class ModelBuilder::Impl
+{
+public:
+    void AddSlave(
+        const std::string& name,
+        const coral::model::SlaveTypeDescription& type)
+    {
+        if (!coral::model::IsValidSlaveName(name)) {
+            throw std::invalid_argument{"Not a valid slave name: " + name};
+        }
+        if (m_slaves.count(name)) {
+            throw ModelConstructionException{"Slave name already in use: " + name};
+        }
+        const auto cachedType =
+            m_slaveTypes
+            .insert(std::make_pair(type.UUID(), CachedSlaveType{type}))
+            .first;
+        m_slaves.insert(std::make_pair(name, &(cachedType->second)));
+    }
+
+    void SetInitialValue(
+        const std::string& slaveName,
+        const std::string& variableName,
+        const coral::model::ScalarValue& value)
+    {
+        const auto& variable = GetVariableDescription(slaveName, variableName);
+        EnforceValidValue(slaveName, variable, value);
+        m_initialValues.insert_or_assign(std::make_pair(
+            QualifiedVariableName{slaveName, variableName},
+            value));
+    }
+
+    void ConnectVariables(
+        const std::string& sourceSlaveName,
+        const std::string& sourceVariableName,
+        const std::string& targetSlaveName,
+        const std::string& targetVariableName)
+    {
+        const auto& sourceVariable =
+            GetVariableDescription(sourceSlaveName, sourceVariableName);
+        const auto& targetVariable =
+            GetVariableDescription(targetSlaveName, targetVariableName);
+        EnforceValidConnection(
+            sourceSlaveName, sourceVariable,
+            targetSlaveName, targetVariable);
+
+        auto ins = m_connections.insert(std::make_pair(
+            QualifiedVariableName{targetSlaveName, targetVariableName},
+            QualifiedVariableName{sourceSlaveName, sourceVariableName}));
+        if (!ins.second) {
+            throw ModelConstructionException{
+                "Variable already connected: "
+                + targetSlaveName + '.' + targetVariableName};
+        }
+    }
+
+private:
+    const coral::model::VariableDescription& GetVariableDescription(
+        const std::string& slaveName,
+        const std::string& variableName)
+    {
+        const auto slaveTypeIt = m_slaves.find(slaveName);
+        if (slaveTypeIt == m_slaves.end()) {
+            throw EntityNotFoundException{
+                "Unknown slave name: " + slaveName};
+        }
+        const auto& slaveType = *(slaveTypeIt->second);
+
+        const auto variableIt = slaveType.variables.find(variableName);
+        if (variableIt == slaveType.variables.end()) {
+            throw EntityNotFoundException{
+                "Unknown variable: " + slaveName + '.' + variableName};
+        }
+        return *(variableIt->second);
+    }
+
+    std::unordered_map<std::string, CachedSlaveType> m_slaveTypes;
+
+    std::unordered_map<std::string, const CachedSlaveType*> m_slaves;
+
+    struct QualifiedVariableName
+    {
+        QualifiedVariableName(const std::string& s, const std::string& v)
+            : slaveName{s}, variableName{v}
+        { }
+
+        bool operator==(const QualifiedVariableName& other) const
+        {
+            return slaveName == other.slaveName &&
+                variableName == other.variableName;
+        }
+
+        std::string slaveName;
+        std::string variableName;
+    };
+
+    struct QualifiedVariableNameHash
+    {
+        std::size_t operator()(const QualifiedVariableName& qn) const noexcept
+        {
+            const auto h1 = std::hash<std::string>{}(qn.slaveName);
+            const auto h2 = std::hash<std::string>{}(qn.variableName);
+            return h1 ^ (h2 << 1);
+        }
+    };
+
+    std::unordered_map<
+            QualifiedVariableName,
+            coral::model::ScalarValue,
+            QualifiedVariableNameHash>
+        m_initialValues;
+
+    std::unordered_map<
+            QualifiedVariableName,
+            QualifiedVariableName,
+            QualifiedVariableNameHash>
+        m_connections;
+};
+
+
+ModelBuilder::ModelBuilder() noexcept
+    : m_impl(new Impl{}, [] (Impl* impl) { delete impl; })
+{
+}
+
+
+void ModelBuilder::AddSlave(
+    const std::string& name,
+    const coral::model::SlaveTypeDescription& type)
+{
+    m_impl->AddSlave(name, type);
+}
+
+
+void ModelBuilder::ConnectVariables(
+    const std::string& outputSlaveName,
+    const std::string& outputVariableName,
+    const std::string& inputSlaveName,
+    const std::string& inputVariableName)
+{
+    m_impl->ConnectVariables(
+        outputSlaveName, outputVariableName,
+        inputSlaveName, inputVariableName);
+}
+
+
+}} // namespace

@@ -78,6 +78,10 @@ enum DataType
 };
 
 
+/// Returns a textual representation of the data type name.
+std::string DataTypeName(DataType dt);
+
+
 /// Variable causalities.  These correspond to FMI causality definitions.
 enum Causality
 {
@@ -87,6 +91,10 @@ enum Causality
     OUTPUT_CAUSALITY                = 1 << 3,
     LOCAL_CAUSALITY                 = 1 << 4,
 };
+
+
+/// Returns a textual representation of the causality name.
+std::string CausalityName(Causality c);
 
 
 /// Variable variabilities.  These correspond to FMI variability definitions.

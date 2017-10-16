@@ -1,12 +1,89 @@
 #include <coral/master/model_builder.hpp>
 
 #include <cassert>
+#include <coral/error.hpp>
 
 
 namespace coral
 {
 namespace master
 {
+
+
+namespace
+{
+    std::string QualifiedVariableNameString(
+        const std::string& slave,
+        const std::string& variable)
+    {
+        auto s = slave;
+        s += '.';
+        s += variable;
+        return s;
+    }
+}
+
+
+// =============================================================================
+// QualifiedVariableName
+// =============================================================================
+
+QualifiedVariableName::QualifiedVariableName(
+    const std::string& slave,
+    const std::string& variable)
+    : m_slave(slave)
+    , m_variable(variable)
+{
+    CORAL_INPUT_CHECK(!slave.empty());
+    CORAL_INPUT_CHECK(!variable.empty());
+}
+
+
+const std::string& QualifiedVariableName::Slave() const
+{
+    return m_slave;
+}
+
+
+const std::string& QualifiedVariableName::Variable() const
+{
+    return m_variable;
+}
+
+
+std::string QualifiedVariableName::ToString() const
+{
+    return QualifiedVariableNameString(m_slave, m_variable);
+}
+
+
+QualifiedVariableName QualifiedVariableName::FromString(const std::string& s)
+{
+    const auto pos = s.find('.');
+    if (pos < 1 || pos >= s.size()-1) {
+        throw std::invalid_argument("Not a fully qualified variable name: " + s);
+    }
+    return QualifiedVariableName{s.substr(0, pos), s.substr(pos+1)};
+}
+
+
+bool QualifiedVariableName::operator==(const QualifiedVariableName& other)
+    const CORAL_NOEXCEPT
+{
+    return m_slave == other.m_slave && m_variable == other.m_variable;
+}
+
+
+bool QualifiedVariableName::operator!=(const QualifiedVariableName& other)
+    const CORAL_NOEXCEPT
+{
+    return !operator==(other);
+}
+
+
+// =============================================================================
+// ModelBuilder
+// =============================================================================
 
 
 namespace
@@ -34,9 +111,10 @@ namespace
         const std::string& details)
     {
         return "Cannot connect variable "
-            + sourceSlaveName + '.' + sourceVariableName + " to "
-            + targetSlaveName + '.' + targetVariableName + ": "
-            + details;
+            + QualifiedVariableNameString(sourceSlaveName, sourceVariableName)
+            + " to "
+            + QualifiedVariableNameString(targetSlaveName, targetVariableName)
+            + ": " + details;
     }
 
 
@@ -52,7 +130,8 @@ namespace
             throw ModelConstructionException{
                 "Attempted to assign a value of type "
                 + coral::model::DataTypeName(coral::model::DataTypeOf(value))
-                + " to variable " + slaveName + '.' + variable.Name()
+                + " to variable "
+                + QualifiedVariableNameString(slaveName, variable.Name())
                 + " which has type "
                 + coral::model::DataTypeName(variable.DataType())};
         }
@@ -132,101 +211,71 @@ public:
     }
 
     void SetInitialValue(
-        const std::string& slaveName,
-        const std::string& variableName,
+        const QualifiedVariableName& variable,
         const coral::model::ScalarValue& value)
     {
-        const auto& variable = GetVariableDescription(slaveName, variableName);
-        EnforceValidValue(slaveName, variable, value);
-        m_initialValues.insert_or_assign(std::make_pair(
-            QualifiedVariableName{slaveName, variableName},
-            value));
+        const auto& varDesc = GetVariableDescription(variable);
+        EnforceValidValue(variable.Slave(), varDesc, value);
+        m_initialValues[variable] = value;
+    }
+
+    const coral::model::ScalarValue& GetInitialValue(
+        const QualifiedVariableName& variable)
+        const
+    {
+        auto valueIt = m_initialValues.find(variable);
+        if (valueIt == m_initialValues.end()) {
+            // TODO: Return the default initial value for the variable.
+            // (Currently not carried by coral::model::VariableDescription.)
+            throw EntityNotFoundException{
+                "No initial value set for variable " + variable.ToString()};
+        }
+        return valueIt->second;
+    }
+    void ResetInitialValue(const QualifiedVariableName& variable)
+    {
+        m_initialValues.erase(variable);
     }
 
     void ConnectVariables(
-        const std::string& sourceSlaveName,
-        const std::string& sourceVariableName,
-        const std::string& targetSlaveName,
-        const std::string& targetVariableName)
+        const QualifiedVariableName& source,
+        const QualifiedVariableName& target)
     {
-        const auto& sourceVariable =
-            GetVariableDescription(sourceSlaveName, sourceVariableName);
-        const auto& targetVariable =
-            GetVariableDescription(targetSlaveName, targetVariableName);
         EnforceValidConnection(
-            sourceSlaveName, sourceVariable,
-            targetSlaveName, targetVariable);
+            source.Slave(), GetVariableDescription(source),
+            target.Slave(), GetVariableDescription(target));
 
-        auto ins = m_connections.insert(std::make_pair(
-            QualifiedVariableName{targetSlaveName, targetVariableName},
-            QualifiedVariableName{sourceSlaveName, sourceVariableName}));
+        auto ins = m_connections.insert(std::make_pair(source, target));
         if (!ins.second) {
             throw ModelConstructionException{
-                "Variable already connected: "
-                + targetSlaveName + '.' + targetVariableName};
+                "Variable already connected: " + target.ToString()};
         }
     }
 
 private:
     const coral::model::VariableDescription& GetVariableDescription(
-        const std::string& slaveName,
-        const std::string& variableName)
+        const QualifiedVariableName& variable)
     {
-        const auto slaveTypeIt = m_slaves.find(slaveName);
+        const auto slaveTypeIt = m_slaves.find(variable.Slave());
         if (slaveTypeIt == m_slaves.end()) {
             throw EntityNotFoundException{
-                "Unknown slave name: " + slaveName};
+                "Unknown slave name: " + variable.Slave()};
         }
         const auto& slaveType = *(slaveTypeIt->second);
 
-        const auto variableIt = slaveType.variables.find(variableName);
+        const auto variableIt = slaveType.variables.find(variable.Variable());
         if (variableIt == slaveType.variables.end()) {
             throw EntityNotFoundException{
-                "Unknown variable: " + slaveName + '.' + variableName};
+                "Unknown variable: " + variable.ToString()};
         }
         return *(variableIt->second);
     }
 
     std::unordered_map<std::string, CachedSlaveType> m_slaveTypes;
-
     std::unordered_map<std::string, const CachedSlaveType*> m_slaves;
-
-    struct QualifiedVariableName
-    {
-        QualifiedVariableName(const std::string& s, const std::string& v)
-            : slaveName{s}, variableName{v}
-        { }
-
-        bool operator==(const QualifiedVariableName& other) const
-        {
-            return slaveName == other.slaveName &&
-                variableName == other.variableName;
-        }
-
-        std::string slaveName;
-        std::string variableName;
-    };
-
-    struct QualifiedVariableNameHash
-    {
-        std::size_t operator()(const QualifiedVariableName& qn) const noexcept
-        {
-            const auto h1 = std::hash<std::string>{}(qn.slaveName);
-            const auto h2 = std::hash<std::string>{}(qn.variableName);
-            return h1 ^ (h2 << 1);
-        }
-    };
-
-    std::unordered_map<
-            QualifiedVariableName,
-            coral::model::ScalarValue,
-            QualifiedVariableNameHash>
+    std::unordered_map<QualifiedVariableName, coral::model::ScalarValue>
         m_initialValues;
-
-    std::unordered_map<
-            QualifiedVariableName,
-            QualifiedVariableName,
-            QualifiedVariableNameHash>
+    std::unordered_map<QualifiedVariableName, QualifiedVariableName>
         m_connections;
 };
 
@@ -245,15 +294,33 @@ void ModelBuilder::AddSlave(
 }
 
 
-void ModelBuilder::ConnectVariables(
-    const std::string& outputSlaveName,
-    const std::string& outputVariableName,
-    const std::string& inputSlaveName,
-    const std::string& inputVariableName)
+void ModelBuilder::SetInitialValue(
+    const QualifiedVariableName& variable,
+    const coral::model::ScalarValue& value)
 {
-    m_impl->ConnectVariables(
-        outputSlaveName, outputVariableName,
-        inputSlaveName, inputVariableName);
+    m_impl->SetInitialValue(variable, value);
+}
+
+
+const coral::model::ScalarValue& ModelBuilder::GetInitialValue(
+    const QualifiedVariableName& variable)
+    const
+{
+    return m_impl->GetInitialValue(variable);
+}
+
+
+void ModelBuilder::ResetInitialValue(const QualifiedVariableName& variable)
+{
+    m_impl->ResetInitialValue(variable);
+}
+
+
+void ModelBuilder::ConnectVariables(
+    const QualifiedVariableName& source,
+    const QualifiedVariableName& target)
+{
+    m_impl->ConnectVariables(source, target);
 }
 
 

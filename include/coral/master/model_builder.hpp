@@ -14,7 +14,9 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
+#include <coral/config.h>
 #include <coral/model.hpp>
 
 
@@ -23,30 +25,50 @@ namespace coral
 namespace master
 {
 
+class QualifiedVariableName
+{
+public:
+    QualifiedVariableName(const std::string& slave, const std::string& variable);
+
+    const std::string& Slave() const;
+
+    const std::string& Variable() const;
+
+    std::string ToString() const;
+
+    static QualifiedVariableName FromString(const std::string& s);
+
+    bool operator==(const QualifiedVariableName& other) const CORAL_NOEXCEPT;
+
+    bool operator!=(const QualifiedVariableName& other) const CORAL_NOEXCEPT;
+
+private:
+    std::string m_slave;
+    std::string m_variable;
+};
+
 
 class ModelBuilder
 {
 public:
-    ModelBuilder() noexcept;
+    ModelBuilder() CORAL_NOEXCEPT;
 
     void AddSlave(
         const std::string& name,
         const coral::model::SlaveTypeDescription& type);
 
     void SetInitialValue(
-        const std::string& slaveName,
-        const std::string& variableName,
+        const QualifiedVariableName& variable,
         const coral::model::ScalarValue& value);
 
-    void ResetInitialValue(
-        const std::string& slaveName,
-        const std::string& variableName);
+    const coral::model::ScalarValue& GetInitialValue(
+        const QualifiedVariableName& variable) const;
+
+    void ResetInitialValue(const QualifiedVariableName& variable);
 
     void ConnectVariables(
-        const std::string& sourceSlaveName,
-        const std::string& sourceVariableName,
-        const std::string& targetSlaveName,
-        const std::string& targetVariableName);
+        const QualifiedVariableName& source,
+        const QualifiedVariableName& target);
 
 private:
     class Impl;
@@ -73,4 +95,22 @@ public:
 
 
 }} // namespace
+
+
+namespace std
+{
+
+template<>
+struct hash<coral::master::QualifiedVariableName>
+{
+    std::size_t operator()(const coral::master::QualifiedVariableName& name)
+        const CORAL_NOEXCEPT
+    {
+        const auto h1 = std::hash<std::string>{}(name.Slave());
+        const auto h2 = std::hash<std::string>{}(name.Variable());
+        return h1 ^ (h2 << 1);
+    }
+};
+
+}
 #endif // header guard

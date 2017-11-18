@@ -93,4 +93,59 @@ TEST(coral_master, ModelBuilder)
         mb.GetInitialValue(QualifiedVariableName{"slave2", "e"}),
         EntityNotFoundException);
 
+    mb.Connect(
+        QualifiedVariableName{"slave1", "a"},
+        QualifiedVariableName{"slave2", "x"});
+    mb.Connect(
+        QualifiedVariableName{"slave1", "b"},
+        QualifiedVariableName{"slave2", "y"});
+    EXPECT_THROW(
+        mb.Connect(
+            QualifiedVariableName{"slaveE", "a"},
+            QualifiedVariableName{"slave2", "x"}),
+        EntityNotFoundException);
+    EXPECT_THROW(
+        mb.Connect(
+            QualifiedVariableName{"slave1", "E"},
+            QualifiedVariableName{"slave2", "x"}),
+        EntityNotFoundException);
+    EXPECT_THROW(
+        mb.Connect(
+            QualifiedVariableName{"slave1", "a"},
+            QualifiedVariableName{"slaveE", "x"}),
+        EntityNotFoundException);
+    EXPECT_THROW(
+        mb.Connect(
+            QualifiedVariableName{"slave1", "a"},
+            QualifiedVariableName{"slave2", "E"}),
+        EntityNotFoundException);
+    EXPECT_THROW( // incompatible data type
+        mb.Connect(
+            QualifiedVariableName{"slave1", "c"},
+            QualifiedVariableName{"slave2", "y"}),
+        ModelConstructionException);
+    EXPECT_THROW( // incompatible causality
+        mb.Connect(
+            QualifiedVariableName{"slave2", "x"},
+            QualifiedVariableName{"slave1", "a"}),
+        ModelConstructionException);
+    EXPECT_THROW( // incompatible variability
+        mb.Connect(
+            QualifiedVariableName{"slave1", "c"},
+            QualifiedVariableName{"slave2", "z"}),
+        ModelConstructionException);
+
+    auto conns = mb.GetConnections();
+    ASSERT_EQ(2U, conns.size());
+    if (std::get<0>(conns[0]).Variable() == "b") {
+        std::swap(conns[0], conns[1]);
+    }
+    EXPECT_EQ(std::get<0>(conns[0]), QualifiedVariableName("slave1", "a"));
+    EXPECT_EQ(std::get<1>(conns[0]), QualifiedVariableName("slave2", "x"));
+    EXPECT_EQ(std::get<0>(conns[1]), QualifiedVariableName("slave1", "b"));
+    EXPECT_EQ(std::get<1>(conns[1]), QualifiedVariableName("slave2", "y"));
+
+    auto unconns = mb.GetUnconnectedInputs();
+    ASSERT_EQ(1U, unconns.size());
+    EXPECT_EQ(unconns[0], QualifiedVariableName("slave2", "z"));
 }

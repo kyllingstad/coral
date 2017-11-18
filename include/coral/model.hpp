@@ -108,6 +108,10 @@ enum Variability
 };
 
 
+/// Returns a textual representation of the variability name.
+std::string VariabilityName(Variability c);
+
+
 /// A description of a single variable.
 class VariableDescription
 {

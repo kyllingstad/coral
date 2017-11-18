@@ -48,6 +48,20 @@ std::string CausalityName(Causality c)
 }
 
 
+std::string VariabilityName(Variability c)
+{
+    switch (c) {
+        case coral::model::CONSTANT_VARIABILITY:    return "constant";
+        case coral::model::FIXED_VARIABILITY:       return "fixed";
+        case coral::model::TUNABLE_VARIABILITY:     return "tunable";
+        case coral::model::DISCRETE_VARIABILITY:    return "discrete";
+        case coral::model::CONTINUOUS_VARIABILITY:  return "continuous";
+    }
+    assert(!"case statement missing");
+    return std::string();
+}
+
+
 namespace
 {
     class DataTypeOfVisitor : public boost::static_visitor<DataType>

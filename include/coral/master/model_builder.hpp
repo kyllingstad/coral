@@ -15,8 +15,11 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <coral/config.h>
+#include <coral/master/cluster.hpp>
+#include <coral/master/execution.hpp>
 #include <coral/model.hpp>
 
 
@@ -66,9 +69,14 @@ public:
 
     void ResetInitialValue(const QualifiedVariableName& variable);
 
-    void ConnectVariables(
+    void Connect(
         const QualifiedVariableName& source,
         const QualifiedVariableName& target);
+
+    std::vector<std::tuple<QualifiedVariableName, QualifiedVariableName>>
+        GetConnections() const;
+
+    std::vector<QualifiedVariableName> GetUnconnectedInputs() const;
 
 private:
     class Impl;

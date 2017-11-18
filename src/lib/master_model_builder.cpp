@@ -1,6 +1,7 @@
 #include <coral/master/model_builder.hpp>
 
 #include <cassert>
+#include <unordered_set>
 #include <coral/error.hpp>
 
 
@@ -175,16 +176,31 @@ namespace
                     "Only output variables and calculated parameters may be used as sources in a connection")};
         }
 
+        // Check variability
+        if (targetVariable.Variability() < coral::model::DISCRETE_VARIABILITY &&
+            targetVariable.Variability() < sourceVariable.Variability()) {
+            throw ModelConstructionException{
+                ConnectionErrMsg(
+                    sourceSlaveName, sourceVariable.Name(),
+                    targetSlaveName, targetVariable.Name(),
+                    "A variable with variability '"
+                        + coral::model::VariabilityName(sourceVariable.Variability())
+                        + "' cannot be connected to a variable with variability '"
+                        + coral::model::VariabilityName(targetVariable.Variability())
+                        + "'")};
+        }
+
         // Check data type
         if (sourceVariable.DataType() != targetVariable.DataType()) {
             throw ModelConstructionException{
                 ConnectionErrMsg(
                     sourceSlaveName, sourceVariable.Name(),
                     targetSlaveName, targetVariable.Name(),
-                    "A variable of type "
+                    "A variable of type '"
                         + coral::model::DataTypeName(sourceVariable.DataType())
-                        + " cannot be connected to a variable of type "
-                        + coral::model::DataTypeName(targetVariable.DataType()))};
+                        + "' cannot be connected to a variable of type '"
+                        + coral::model::DataTypeName(targetVariable.DataType())
+                        + "'")};
         }
     }
 }
@@ -232,12 +248,13 @@ public:
         }
         return valueIt->second;
     }
+
     void ResetInitialValue(const QualifiedVariableName& variable)
     {
         m_initialValues.erase(variable);
     }
 
-    void ConnectVariables(
+    void Connect(
         const QualifiedVariableName& source,
         const QualifiedVariableName& target)
     {
@@ -245,11 +262,49 @@ public:
             source.Slave(), GetVariableDescription(source),
             target.Slave(), GetVariableDescription(target));
 
-        auto ins = m_connections.insert(std::make_pair(source, target));
+        auto ins = m_connections.insert(std::make_pair(target, source));
         if (!ins.second) {
             throw ModelConstructionException{
                 "Variable already connected: " + target.ToString()};
         }
+    }
+
+    std::vector<std::tuple<QualifiedVariableName, QualifiedVariableName>>
+        GetConnections() const
+    {
+        std::vector<std::tuple<QualifiedVariableName, QualifiedVariableName>> v;
+        for (const auto& c : m_connections) {
+            v.push_back(std::make_tuple(c.second, c.first));
+        }
+        return v;
+    }
+
+    std::vector<QualifiedVariableName> GetUnconnectedInputs() const
+    {
+        // First make a list of all *connected* input variables
+        std::unordered_set<QualifiedVariableName> connected;
+        for (const auto& c : m_connections) {
+            connected.insert(c.first);
+        }
+
+        // Then go through the full list of variables and add those inputs
+        // now *not* in `connected`.
+        std::vector<QualifiedVariableName> unconnected;
+        for (const auto& s : m_slaves) {
+            const auto& slaveName = s.first;
+            const auto& cachedSlaveType = *s.second;
+            for (const auto& v : cachedSlaveType.variables) {
+                const auto& varName = v.first;
+                const auto& varDesc = *v.second;
+                if (varDesc.Causality() == coral::model::INPUT_CAUSALITY) {
+                    QualifiedVariableName qv{slaveName, varName};
+                    if (connected.count(qv) == 0) {
+                        unconnected.push_back(qv);
+                    }
+                }
+            }
+        }
+        return unconnected;
     }
 
 private:
@@ -316,11 +371,24 @@ void ModelBuilder::ResetInitialValue(const QualifiedVariableName& variable)
 }
 
 
-void ModelBuilder::ConnectVariables(
+void ModelBuilder::Connect(
     const QualifiedVariableName& source,
     const QualifiedVariableName& target)
 {
-    m_impl->ConnectVariables(source, target);
+    m_impl->Connect(source, target);
+}
+
+
+std::vector<std::tuple<QualifiedVariableName, QualifiedVariableName>>
+    ModelBuilder::GetConnections() const
+{
+    return m_impl->GetConnections();
+}
+
+
+std::vector<QualifiedVariableName> ModelBuilder::GetUnconnectedInputs() const
+{
+    return m_impl->GetUnconnectedInputs();
 }
 
 

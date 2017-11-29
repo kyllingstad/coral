@@ -226,6 +226,15 @@ public:
         m_slaves.insert(std::make_pair(name, &(cachedType->second)));
     }
 
+    std::map<std::string, coral::model::SlaveTypeDescription> GetSlaves() const
+    {
+        std::map<std::string, coral::model::SlaveTypeDescription> slaves;
+        for (const auto& s : m_slaves) {
+            slaves.insert(std::make_pair(s.first, s.second->description));
+        }
+        return slaves;
+    }
+
     void SetInitialValue(
         const QualifiedVariableName& variable,
         const coral::model::ScalarValue& value)
@@ -252,6 +261,16 @@ public:
     void ResetInitialValue(const QualifiedVariableName& variable)
     {
         m_initialValues.erase(variable);
+    }
+
+    std::map<QualifiedVariableName, coral::model::ScalarValue>
+        GetInitialValues() const
+    {
+        std::map<QualifiedVariableName, coral::model::ScalarValue> values;
+        for (const auto& iv : m_initialValues) {
+            values.insert(iv);
+        }
+        return values;
     }
 
     void Connect(
@@ -307,6 +326,14 @@ public:
         return unconnected;
     }
 
+    void Build(Execution& execution, ProviderCluster& cluster) const
+    {
+        std::unordered_map<std::string, std::string> providers;
+        for (const auto& st : cluster.GetSlaveTypes()) {
+            providers.insert(std::pair(st.description.UUID(), st.providers.front()));
+        }
+    }
+
 private:
     const coral::model::VariableDescription& GetVariableDescription(
         const QualifiedVariableName& variable)
@@ -346,6 +373,13 @@ void ModelBuilder::AddSlave(
     const coral::model::SlaveTypeDescription& type)
 {
     m_impl->AddSlave(name, type);
+}
+
+
+std::map<std::string, coral::model::SlaveTypeDescription>
+    ModelBuilder::GetSlaves() const
+{
+    return m_impl->GetSlaves();
 }
 
 

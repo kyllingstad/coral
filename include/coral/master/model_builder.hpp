@@ -60,6 +60,8 @@ public:
         const std::string& name,
         const coral::model::SlaveTypeDescription& type);
 
+    std::map<std::string, coral::model::SlaveTypeDescription> GetSlaves() const;
+
     void SetInitialValue(
         const QualifiedVariableName& variable,
         const coral::model::ScalarValue& value);
@@ -69,6 +71,9 @@ public:
 
     void ResetInitialValue(const QualifiedVariableName& variable);
 
+    std::map<QualifiedVariableName, coral::model::ScalarValue>
+        GetInitialValues() const;
+
     void Connect(
         const QualifiedVariableName& source,
         const QualifiedVariableName& target);
@@ -77,6 +82,8 @@ public:
         GetConnections() const;
 
     std::vector<QualifiedVariableName> GetUnconnectedInputs() const;
+
+    void Build(Execution& execution, ProviderCluster& cluster) const;
 
 private:
     class Impl;

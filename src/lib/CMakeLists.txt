@@ -36,6 +36,8 @@ set (_privateHeaders
     "coral/bus/slave_control_messenger_v0.hpp"
     "coral/bus/slave_provider_comm.hpp"
     "coral/bus/slave_setup.hpp"
+    "coral/event/future.hpp"
+    "coral/event/reactor.hpp"
     "coral/net/ip.hpp"
     "coral/net/reactor.hpp"
     "coral/net/reqrep.hpp"
@@ -104,6 +106,7 @@ set (_testSources
 
     "async_test.cpp"
     "error_test.cpp"
+    "event_future_test.cpp"
     "fmi_fmu1_test.cpp"
     "fmi_fmu2_test.cpp"
     "master_execution_test.cpp"

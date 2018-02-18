@@ -187,5 +187,23 @@ private:
 };
 
 
+/**
+\brief  Sets up an event which will be triggered as soon as possible.
+
+This is a convenience function which is equivalent to:
+~~~{.cpp}
+reactor.AddTimer(std::chrono::milliseconds(0), 1, [handler] (Reactor& r, int) {
+    handler(r);
+});
+~~~
+It is used to trigger an event as soon as possible, usually at the next
+iteration of the event loop.
+
+Note that there is no guarantee that two events added in this way will be
+triggered in the order they were added.
+*/
+void AddImmediateEvent(Reactor& reactor, std::function<void(Reactor&)> handler);
+
+
 }}      // namespace
 #endif  // header guard

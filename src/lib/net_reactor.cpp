@@ -298,4 +298,12 @@ Reactor::Timer::Timer(
 }
 
 
+void AddImmediateEvent(Reactor& reactor, std::function<void(Reactor&)> handler)
+{
+    reactor.AddTimer(std::chrono::milliseconds(0), 1, [handler] (Reactor& r, int) {
+        handler(r);
+    });
+}
+
+
 }} // namespace

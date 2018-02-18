@@ -181,3 +181,32 @@ TEST(coral_net, Reactor_autostop)
     reactor.Run();
     EXPECT_EQ(2, count);
 }
+
+
+TEST(coral_net, Reactor_AddImmediateEvent)
+{
+    Reactor reactor;
+    bool event1Triggered = false;
+    bool event2Triggered = false;
+    bool timerTriggered = false;
+    reactor.AddTimer(std::chrono::milliseconds(50), 1, [&] (Reactor& r, int) {
+        EXPECT_TRUE(event1Triggered);
+        EXPECT_TRUE(event2Triggered);
+        timerTriggered = true;
+        r.Stop();
+    });
+    AddImmediateEvent(reactor, [&] (Reactor& r) {
+        EXPECT_EQ(&reactor, &r);
+        EXPECT_FALSE(timerTriggered);
+        event1Triggered = true;
+    });
+    AddImmediateEvent(reactor, [&] (Reactor& r) {
+        EXPECT_EQ(&reactor, &r);
+        EXPECT_FALSE(timerTriggered);
+        event2Triggered = true;
+    });
+    reactor.Run();
+    EXPECT_TRUE(event1Triggered);
+    EXPECT_TRUE(event2Triggered);
+    EXPECT_TRUE(timerTriggered);
+}

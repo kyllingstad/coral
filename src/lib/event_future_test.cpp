@@ -229,3 +229,38 @@ TEST(coral_event, Future_void_broken)
         EXPECT_TRUE(e.code() == std::future_errc::broken_promise);
     }
 }
+
+
+TEST(coral_event, Chain)
+{
+    Reactor reactor;
+    Promise<int>    promise1(reactor);
+    Promise<void>   promise2(reactor);
+    Promise<double> promise3(reactor);
+
+    int value1 = 0;
+    bool value2 = false;
+    double value3 = 0.0;
+    bool exception = false;
+
+    Chain(promise1.GetFuture(), [&] (const int& i) {
+        value1 = i;
+        return promise2.GetFuture();
+    }).Then([&] () {
+        value2 = true;
+        return promise3.GetFuture();
+    }).Then([&] (const double& d) {
+        value3 = d;
+    }).Catch([&] (std::exception_ptr ep) {
+        exception = true;
+    });
+
+    promise1.SetValue(123);
+    promise2.SetValue();
+    promise3.SetException(std::make_exception_ptr(std::length_error("")));
+    reactor.Run();
+    EXPECT_EQ(123, value1);
+    EXPECT_TRUE(value2);
+    EXPECT_EQ(0.0, value3);
+    EXPECT_TRUE(exception);
+}

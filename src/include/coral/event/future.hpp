@@ -14,6 +14,7 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <type_traits>
 #include <utility>
 #include <boost/optional.hpp>
 
@@ -78,6 +79,8 @@ public:
      *    - No result/exception handler has been assigned yet.
      */
     bool Valid() CORAL_NOEXCEPT;
+
+    Reactor& GetReactor() const CORAL_NOEXCEPT;
 
 private:
     std::shared_ptr<detail::SharedState<T>> m_state;
@@ -146,6 +149,118 @@ Future<typename detail::WhenAllState<typename std::iterator_traits<FutureIt>::va
             it->OnCompletion(
                 [state] (const T& result) {
 */
+
+/*
+template<typename T, typename H>
+auto Chain(Future<T> future, H&& handler)
+    ->  std::enable_if_t<
+            detail::IsFuture<std::result_of_t<H(const T&)>>::value,
+            typename std::result_of_t<H(const T&)>>
+{
+    using R = typename std::result_of_t<H()>::ResultType;
+    auto promise = std::make_shared<Promise<R>>(future.GetReactor());
+    future.OnCompletion(
+        [handler = std::forward<H>(handler), promise] () {
+            handler().OnCompletion(
+                [promise] (const R& nextResult) {
+                    promise->SetValue(nextResult);
+                },
+                [promise] (std::exception_ptr ep) {
+                    promise->SetException(ep);
+                });
+        },
+        [promise] (std::exception_ptr ep) {
+            promise->SetException(ep);
+        });
+    future_ = Future<void>();
+    return ChainedFuture<R>(promise->GetFuture());
+}
+*/
+
+template<typename T>
+class ChainedFuture;
+
+class EndChainedFuture;
+
+
+namespace detail
+{
+    template<typename F>
+    struct IsFuture { static constexpr bool value = false; };
+
+    template<typename T>
+    struct IsFuture<Future<T>> { static constexpr bool value = true; };
+}
+
+
+template<typename T>
+class ChainedFuture
+{
+public:
+    ChainedFuture(Future<T> future);
+
+    template<typename H>
+    auto Then(H&& handler)
+        ->  std::enable_if_t<
+                detail::IsFuture<std::result_of_t<H(const T&)>>::value,
+                ChainedFuture<typename std::result_of_t<H(const T&)>::ResultType>>;
+
+    template<typename H>
+    auto Then(H&& handler)
+        ->  std::enable_if_t<
+                std::is_void<std::result_of_t<H(const T&)>>::value,
+                EndChainedFuture>;
+
+    void Catch(std::function<void(std::exception_ptr)> handler);
+
+private:
+    Future<T> future_;
+};
+
+
+template<>
+class ChainedFuture<void>
+{
+public:
+    ChainedFuture(Future<void> future);
+
+    template<typename H>
+    auto Then(H&& handler)
+        ->  std::enable_if_t<
+                detail::IsFuture<std::result_of_t<H()>>::value,
+                ChainedFuture<typename std::result_of_t<H()>::ResultType>>;
+
+    template<typename H>
+    auto Then(H&& handler)
+        ->  std::enable_if_t<
+                std::is_void<std::result_of_t<H()>>::value,
+                EndChainedFuture>;
+
+    void Catch(std::function<void(std::exception_ptr)> handler);
+
+private:
+    Future<void> future_;
+};
+
+
+class EndChainedFuture
+{
+public:
+    EndChainedFuture(Future<void> future);
+
+    void Catch(std::function<void(std::exception_ptr)> handler);
+
+private:
+    Future<void> future_;
+};
+
+
+template<typename T, typename H>
+auto Chain(Future<T> original, H&& handler)
+    ->  decltype(ChainedFuture<T>(std::move(original)).Then(std::forward<H>(handler)))
+{
+    return ChainedFuture<T>(std::move(original)).Then(std::forward<H>(handler));
+}
 
 
 // =============================================================================
@@ -274,6 +389,13 @@ template<typename T>
 bool Future<T>::Valid() CORAL_NOEXCEPT
 {
     return m_state && !m_state->resultHandler;
+}
+
+
+template<typename T>
+Reactor& Future<T>::GetReactor() const CORAL_NOEXCEPT
+{
+    return m_state->reactor;
 }
 
 
@@ -416,6 +538,162 @@ inline void Promise<void>::SetValue()
 inline void Promise<void>::SetException(std::exception_ptr ep)
 {
     detail::SetException(m_state, ep);
+}
+
+
+// =============================================================================
+// ChainedFuture<T> function definitions
+// =============================================================================
+
+
+namespace detail
+{
+    template<typename T>
+    void Chain(Future<T> future, std::shared_ptr<Promise<T>> promise)
+    {
+        future.OnCompletion(
+            [promise] (const T& r) { promise->SetValue(r); },
+            [promise] (std::exception_ptr ep) { promise->SetException(ep); });
+    }
+
+    void Chain(Future<void> future, std::shared_ptr<Promise<void>> promise)
+    {
+        future.OnCompletion(
+            [promise] () { promise->SetValue(); },
+            [promise] (std::exception_ptr ep) { promise->SetException(ep); });
+    }
+}
+
+
+template<typename T>
+ChainedFuture<T>::ChainedFuture(Future<T> future)
+    : future_(std::move(future))
+{ }
+
+
+template<typename T>
+template<typename H>
+auto ChainedFuture<T>::Then(H&& handler)
+    ->  std::enable_if_t<
+            detail::IsFuture<std::result_of_t<H(const T&)>>::value,
+            ChainedFuture<typename std::result_of_t<H(const T&)>::ResultType>>
+{
+    using R = typename std::result_of_t<H(const T&)>::ResultType;
+    auto promise = std::make_shared<Promise<R>>(future_.GetReactor());
+    future_.OnCompletion(
+        [handler = std::forward<H>(handler), promise] (const T& result) {
+            detail::Chain(handler(result), promise);
+        },
+        [promise] (std::exception_ptr ep) {
+            promise->SetException(ep);
+        });
+    future_ = Future<T>();
+    return ChainedFuture<R>(promise->GetFuture());
+}
+
+
+template<typename T>
+template<typename H>
+auto ChainedFuture<T>::Then(H&& handler)
+    ->  std::enable_if_t<
+            std::is_void<std::result_of_t<H(const T&)>>::value,
+            EndChainedFuture>
+{
+    auto promise = std::make_shared<Promise<void>>(future_.GetReactor());
+    future_.OnCompletion(
+        [handler = std::forward<H>(handler), promise] (const T& result) {
+            handler(result);
+            promise->SetValue();
+        },
+        [promise] (std::exception_ptr ep) {
+            promise->SetException(ep);
+        });
+    future_ = Future<T>();
+    return EndChainedFuture(promise->GetFuture());
+}
+
+
+template<typename T>
+void ChainedFuture<T>::Catch(std::function<void(std::exception_ptr)> handler)
+{
+    future_.OnCompletion([] (const T&) { }, std::move(handler));
+    future_ = Future<T>();
+}
+
+
+// =============================================================================
+// ChainedFuture<void> function definitions
+// =============================================================================
+
+
+inline ChainedFuture<void>::ChainedFuture(Future<void> future)
+    : future_(std::move(future))
+{ }
+
+
+template<typename H>
+inline auto ChainedFuture<void>::Then(H&& handler)
+    ->  std::enable_if_t<
+            detail::IsFuture<std::result_of_t<H()>>::value,
+            ChainedFuture<typename std::result_of_t<H()>::ResultType>>
+{
+    using R = typename std::result_of_t<H()>::ResultType;
+    auto promise = std::make_shared<Promise<R>>(future_.GetReactor());
+    future_.OnCompletion(
+        [handler = std::forward<H>(handler), promise] () {
+            detail::Chain(handler(), promise);
+        },
+        [promise] (std::exception_ptr ep) {
+            promise->SetException(ep);
+        });
+    future_ = Future<void>();
+    return ChainedFuture<R>(promise->GetFuture());
+}
+
+
+template<typename H>
+inline auto ChainedFuture<void>::Then(H&& handler)
+    ->  std::enable_if_t<
+            std::is_void<std::result_of_t<H()>>::value,
+            EndChainedFuture>
+{
+    auto promise = std::make_shared<Promise<void>>(future_.GetReactor());
+    future_.OnCompletion(
+        [handler = std::forward<H>(handler), promise] () {
+            handler();
+            promise->SetValue();
+        },
+        [promise] (std::exception_ptr ep) {
+            promise->SetException(ep);
+        });
+    future_ = Future<void>();
+    return EndChainedFuture(promise->GetFuture());
+}
+
+
+inline void ChainedFuture<void>::Catch(
+    std::function<void(std::exception_ptr)> handler)
+{
+    future_.OnCompletion([] () { }, std::move(handler));
+    future_ = Future<void>();
+}
+
+
+// =============================================================================
+// EndChainedFuture function definitions
+// =============================================================================
+
+
+inline EndChainedFuture::EndChainedFuture(Future<void> future)
+    : future_(std::move(future))
+{ }
+
+
+inline void EndChainedFuture::Catch(
+    std::function<void(std::exception_ptr)> handler)
+{
+    future_.OnCompletion([] () { }, std::move(handler));
+    future_ = Future<void>();
 }
 
 

@@ -47,39 +47,133 @@ namespace detail
 }
 
 
+/**
+ *  \brief  Represents the eventual completion (or failure) of an asynchronous
+ *          operation, and its resulting value (or exception).
+ *
+ *  The prime use case for `Future` is as a return value from a function whose
+ *  result is not immediately available, but will become available later
+ *  (typically as a result of a `Reactor` event).  Hence, it is an alternative
+ *  to taking a completion handler callback as a function parameter.
+ *
+ *  The user of a `Future` object calls `OnCompletion()` to register a result
+ *  handler and an error handler.  These are callback functions that will be
+ *  called when a result is ready or an error occurs, respectively.
+ *
+ *  An object of this class works in tandem with a corresponding `Promise`
+ *  object that is used to set the value (or exception), triggering a call
+ *  to the completion handler.  The `Promise` must be created first, and
+ *  then the `Future` is obtained by calling `Promise::GetFuture()`.
+ *
+ *  A `Promise` and its corresponding `Future` have a "shared state" which
+ *  contains either the result/exception, stored by the `Promise`, or the
+ *  result and exception handlers, stored by the `Future`. Once the shared state
+ *  contains both a result/exception and a set of handlers, the appropriate
+ *  handler will be called.
+ *
+ *  A `Promise`, and by extension its `Future`, are associated with a `Reactor`
+ *  which is used to dispatch the event that triggers the handler call.
+ *
+ *  **Comparison with `std::future`**
+ *
+ *  `Future` is similar to `std::future`, except that it uses a "push" style
+ *  mechanism to transfer the result rather than the "pull" style API of
+ *  `std::future`.  That is, setting a result with `Promise` causes the
+ *  completion handler of the corresponding `Future` to be called automatically.
+ *  This is in contrast to `std::future`, where one calls the `get_value()`
+ *  function which blocks until a result is ready.
+ *
+ *  Furthermore, while `std::future` is designed for use in multi-threaded
+ *  code, `Future` is designed for use in single-threaded code (and is in
+ *  fact not thread-safe at all).
+ */
 template<typename T>
 class Future
 {
 public:
+    /// The type of the future result.
     using ResultType = T;
 
+    /**
+     *  \brief  Default constructor; creates an empty `Future`.
+     *
+     *  This constructs an empty `Future`, i.e., one which does not share
+     *  state with any `Promise`.  The only functions which can safely be
+     *  called on such an object are its destructor, its assignment operator
+     *  and `Valid()`.
+     *
+     *  The only way to obtain a non-empty `Future` is to call
+     *  `Promise::GetFuture()`.
+     */
     Future();
 
+    // For internal use by `Promise::GetFuture()`.
     explicit Future(std::shared_ptr<detail::SharedState<T>> state);
 
+    /// Destructor.
     ~Future();
 
+    /// Copying is disabled, as there may only be one `Future` per `Promise`.
     Future(const Future&) = delete;
+
+    /// Copying is disabled, as there may only be one `Future` per `Promise`.
     Future& operator=(const Future&) = delete;
 
+    /// Move constructor. Leaves `other` in the empty state.
     Future(Future&& other) CORAL_NOEXCEPT;
+
+    /// Move assignment operator. Leaves `other` in the empty state.
     Future& operator=(Future&&) CORAL_NOEXCEPT;
 
+    /**
+     *  \brief  Specifies the callback functions that will be called when a
+     *          result is ready or an error occurs.
+     *
+     *  If the shared state contains a result or an exception at the time this
+     *  function is called, it will register an event with the associated
+     *  `Reactor` (using `AddImmediateEvent()`), causing the appropriate handler
+     *  to be called at the next iteration of the event loop.
+     *
+     *  If the shared state does *not* contain a result or exception, the
+     *  handlers will be stored in the shared state and invoked whenever a
+     *  result or exception becomes ready.  This means that the handlers
+     *  may be called even after the `Future` object has been destroyed.
+     *
+     *  This function may only be called once, and it may not be called on
+     *  an object for which `Valid()` returns `false`.
+     *
+     *  \param [in] resultHandler
+     *      The result handler, which must be a callable object with signature
+     *      `void(const T&)`, or `void()` if `T` is `void`.
+     *
+     *  \param [in] exceptionHandler
+     *      The exception handler, which must be a callable object with
+     *      signature `void(std::exception_ptr)`.  This may be omitted, in
+     *      which case it defaults to `std::rethrow_exception`, which simply
+     *      throws the exception.
+     *
+     *  \throws std::invalid_argument
+     *      if `resultHandler` or `exceptionHandler` is empty.
+     *
+     *  \pre `Valid()` returns `true`.
+     *  \post `Valid()` returns `false`.
+     */
     void OnCompletion(
         typename detail::ResultHandler<T>::Type resultHandler,
         std::function<void(std::exception_ptr)> exceptionHandler = std::rethrow_exception);
 
     /**
-     *  \brief Checks if the future is valid.
+     *  \brief Checks if this `Future` is valid.
      *
      *  This is true if and only if the following conditions hold:
      *
-     *    - The future was not default-constructed.
-     *    - The future has not been moved from.
+     *    - The `Future` was not default-constructed.
+     *    - It has not been moved from.
      *    - No result/exception handler has been assigned yet.
      */
     bool Valid() CORAL_NOEXCEPT;
 
+    /// Returns the `Reactor` associated with this `Future`.
     Reactor& GetReactor() const CORAL_NOEXCEPT;
 
 private:
@@ -87,12 +181,56 @@ private:
 };
 
 
+/**
+ *  \brief  Provides a facility to store the result of an asynchronous
+ *          operation so it can be retrieved via a `Future`.
+ *
+ *  A `Promise` and its corresponding `Future` have a "shared state" which
+ *  contains either the result/exception, stored by the `Promise`, or the
+ *  result and exception handlers, stored by the `Future`. Once the shared state
+ *  contains both a result/exception and a set of handlers, the appropriate
+ *  handler will be called.
+ *
+ *  A `Promise`, and by extension its `Future`, are associated with a `Reactor`
+ *  which is used to dispatch the event that triggers the handler call.
+ *
+ *  **Comparison with `std::promise`**
+ *
+ *  `Promise` is similar to `std::promise`, except that it uses a "push" style
+ *  mechanism to transfer the result rather than the "pull" style API of
+ *  `std::promise` and `std::future`.  That is, setting a result with `Promise`
+ *  causes the completion handler of the corresponding `Future` to be called
+ *  automatically.  This is in contrast to `std::future`, where one calls the
+ *  `get_value()` function which blocks until a result is ready.
+ *
+ *  Furthermore, while `std::promise` is designed for use in multi-threaded
+ *  code, `Promise` is designed for use in single-threaded code (and is in
+ *  fact not thread-safe at all).
+ */
 template<typename T>
 class Promise
 {
 public:
+    /**
+     *  \brief  Constructor.
+     *
+     *  This creates a `Promise` which is associated with the given `Reactor`.
+     *  The `Reactor` object must always outlive the `Promise` object.
+     */
     Promise(Reactor& reactor);
+
+    /// Destructor.
     ~Promise();
+
+    /**
+     *  \brief  Returns a `Future` which shares state with this `Promise`.
+     *
+     *  The returned `Future` object is typically passed to the code which
+     *  is supposed to deal with the result/exception from the operation.
+     *
+     *  This function may only be called once for a given `Promise`, as
+     *  there may only be one `Future` with which it shares state.
+     */
     Future<T> GetFuture();
     void SetValue(const T& result);
     void SetException(std::exception_ptr ep);

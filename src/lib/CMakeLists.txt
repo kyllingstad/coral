@@ -36,6 +36,7 @@ set (_privateHeaders
     "coral/bus/slave_control_messenger_v0.hpp"
     "coral/bus/slave_provider_comm.hpp"
     "coral/bus/slave_setup.hpp"
+    "coral/event.hpp"
     "coral/event/future.hpp"
     "coral/event/reactor.hpp"
     "coral/net/ip.hpp"

@@ -17,6 +17,7 @@
 #include <type_traits>
 #include <utility>
 #include <boost/optional.hpp>
+#include <boost/variant.hpp>
 
 #include <coral/config.h>
 #include <coral/error.hpp>
@@ -486,6 +487,72 @@ auto Chain(Future<T> original, H&& handler)
     ->  decltype(detail::ChainedFuture<T>(std::move(original)).Then(std::forward<H>(handler)))
 {
     return detail::ChainedFuture<T>(std::move(original)).Then(std::forward<H>(handler));
+}
+
+
+namespace detail
+{
+    template<typename FutureIt>
+    struct FutureItRT
+    {
+        using type = std::iterator_traits<FutureIt>::value_type::ResultType;
+    };
+
+    template<typename T>
+    struct OCOAState
+    {
+        using ResultType = boost::variant<std::exception_ptr, T>;
+
+        int completed = 0;
+        std::vector<ResultType> results;
+        Promise<std::vector<ResultType>> promise;
+
+        OCOAState(Reactor& reactor) : promise(reactor) { }
+    };
+}
+
+
+template<typename ForwardIt>
+auto OnCompletionOfAll(ForwardIt first, ForwardIt last)
+    ->  Future<std::vector<boost::variant<
+            std::exception_ptr,
+            typename FutureItRT<ForwardIt>::type
+        >>>
+{
+    static_assert(
+        std::is_nothrow_copy_assignable<T>::value,
+        "Result type of futures must be no-throw copy assignable");
+    if (first == last) {
+        throw std::length_error("Empty range");
+    }
+    for (auto it = first; it != last; ++it) {
+        if (!it->Valid()) {
+            throw std::future_error(std::future_errc::no_state);
+        }
+    }
+
+    using T = ???;
+    auto state = std::make_shared<OCOAState<T>>(first->GetReactor());
+    std::size_t index = 0;
+    for (auto it = first; it != last; ++it) {
+        state->results.emplace_back();
+        it->OnCompletion(
+            [state, index] (const T& result) {
+                state->results[index] = result; // noexcept, as per the static_assert above
+                ++(state->completed);
+                if (state->completed == state->results.size()) {
+                    state->promise.SetValue(state->results);
+                }
+            },
+            [state, index] (std::exception_ptr ex) {
+                state->results[index] = ex;
+                ++(state->completed);
+                if (state->completed == state->results.size()) {
+                    state->promise.SetValue(state->results);
+                }
+            });
+    }
+    return state->promise.GetFuture();
 }
 
 

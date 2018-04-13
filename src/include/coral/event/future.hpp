@@ -774,14 +774,14 @@ inline void Promise<void>::SetException(std::exception_ptr ep)
 namespace detail
 {
     template<typename T>
-    void Chain(Future<T> future, std::shared_ptr<Promise<T>> promise)
+    void Chain_(Future<T> future, std::shared_ptr<Promise<T>> promise)
     {
         future.OnCompletion(
             [promise] (const T& r) { promise->SetValue(r); },
             [promise] (std::exception_ptr ep) { promise->SetException(ep); });
     }
 
-    void Chain(Future<void> future, std::shared_ptr<Promise<void>> promise)
+    void Chain_(Future<void> future, std::shared_ptr<Promise<void>> promise)
     {
         future.OnCompletion(
             [promise] () { promise->SetValue(); },
@@ -813,7 +813,7 @@ namespace detail
                     promise->SetException(std::current_exception());
                     return;
                 }
-                Chain(std::move(f), promise);
+                Chain_(std::move(f), promise);
             },
             [promise] (std::exception_ptr ep) {
                 promise->SetException(ep);
@@ -886,7 +886,7 @@ namespace detail
                     promise->SetException(std::current_exception());
                     return;
                 }
-                Chain(std::move(f), promise);
+                Chain_(std::move(f), promise);
             },
             [promise] (std::exception_ptr ep) {
                 promise->SetException(ep);

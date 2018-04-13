@@ -493,13 +493,13 @@ auto Chain(Future<T> original, H&& handler)
 namespace detail
 {
     template<typename FutureIt>
-    struct FutureItRT
+    struct FutureItTraits
     {
-        using type = std::iterator_traits<FutureIt>::value_type::ResultType;
+        using type = typename std::iterator_traits<FutureIt>::value_type::ResultType;
     };
 
     template<typename T>
-    struct OCOAState
+    struct WhenAllState
     {
         using ResultType = boost::variant<std::exception_ptr, T>;
 
@@ -507,18 +507,19 @@ namespace detail
         std::vector<ResultType> results;
         Promise<std::vector<ResultType>> promise;
 
-        OCOAState(Reactor& reactor) : promise(reactor) { }
+        WhenAllState(Reactor& reactor) : promise(reactor) { }
     };
 }
 
 
 template<typename ForwardIt>
-auto OnCompletionOfAll(ForwardIt first, ForwardIt last)
+auto WhenAll(ForwardIt first, ForwardIt last)
     ->  Future<std::vector<boost::variant<
             std::exception_ptr,
-            typename FutureItRT<ForwardIt>::type
+            typename detail::FutureItTraits<ForwardIt>::type
         >>>
 {
+    using T = typename detail::FutureItTraits<ForwardIt>::type;
     static_assert(
         std::is_nothrow_copy_assignable<T>::value,
         "Result type of futures must be no-throw copy assignable");
@@ -531,8 +532,7 @@ auto OnCompletionOfAll(ForwardIt first, ForwardIt last)
         }
     }
 
-    using T = ???;
-    auto state = std::make_shared<OCOAState<T>>(first->GetReactor());
+    auto state = std::make_shared<detail::WhenAllState<T>>(first->GetReactor());
     std::size_t index = 0;
     for (auto it = first; it != last; ++it) {
         state->results.emplace_back();

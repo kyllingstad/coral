@@ -417,3 +417,33 @@ TEST_F(coral_event_Chain, handlerException3)
     EXPECT_EQ(0.0, value3);
     EXPECT_TRUE(exception);
 }
+
+
+TEST(coral_event_WhenAll, normal)
+{
+    Reactor reactor;
+    Promise<int> promise0(reactor);
+    Promise<int> promise1(reactor);
+    Promise<int> promise2(reactor);
+    std::vector<Future<int>> futures;
+    futures.push_back(promise0.GetFuture());
+    futures.push_back(promise1.GetFuture());
+    futures.push_back(promise2.GetFuture());
+
+    std::vector<boost::variant<std::exception_ptr, int>> results;
+    WhenAll(futures.begin(), futures.end()).OnCompletion(
+        [&] (const std::vector<boost::variant<std::exception_ptr, int>>& v)
+    {
+        results = v;
+    });
+    promise0.SetValue(-1);
+    promise1.SetValue(100);
+    reactor.Run();
+    EXPECT_TRUE(results.empty());
+    promise2.SetValue(9);
+    reactor.Run();
+    EXPECT_EQ( 3u, results.size());
+    EXPECT_EQ( -1, boost::get<int>(results[0]));
+    EXPECT_EQ(100, boost::get<int>(results[1]));
+    EXPECT_EQ(  9, boost::get<int>(results[2]));
+}

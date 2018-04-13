@@ -17,7 +17,6 @@
 #include <type_traits>
 #include <utility>
 #include <boost/optional.hpp>
-#include <boost/variant.hpp>
 
 #include <coral/config.h>
 #include <coral/error.hpp>
@@ -490,36 +489,52 @@ auto Chain(Future<T> original, H&& handler)
 }
 
 
+template<typename T>
+struct AnyResult
+{
+    boost::optional<T> value;
+    std::exception_ptr exception;
+};
+
+
 namespace detail
 {
     template<typename FutureIt>
-    struct FutureItTraits
-    {
-        using type = typename std::iterator_traits<FutureIt>::value_type::ResultType;
-    };
+    using FutureItResultType = typename std::iterator_traits<FutureIt>::value_type::ResultType;
 
     template<typename T>
     struct WhenAllState
     {
-        using ResultType = boost::variant<std::exception_ptr, T>;
-
-        int completed = 0;
-        std::vector<ResultType> results;
-        Promise<std::vector<ResultType>> promise;
+        unsigned completed = 0;
+        std::vector<AnyResult<T>> results;
+        Promise<std::vector<AnyResult<T>>> promise;
 
         WhenAllState(Reactor& reactor) : promise(reactor) { }
     };
 }
 
 
+/**
+ *  \brief  Creates a Future whose completion is tied to the completion
+ *          of a number of other futures.
+ *
+ *  This function takes a sequence of Future objects and returns a single
+ *  one whose result is ready when the results of *all* the input futures
+ *  are ready.
+ *
+ *  \param [in] first
+ *      An iterator to the beginning of a sequence of objects of type
+ *      `Future<T>`, where `T` must be some type which satisfies
+ *      `std::is_nothrow_copy_assignable`.
+ *  \param [in] last
+ *      An iterator that points one element past the end of the sequence
+ *      started by `first`.
+ */
 template<typename ForwardIt>
-auto WhenAll(ForwardIt first, ForwardIt last)
-    ->  Future<std::vector<boost::variant<
-            std::exception_ptr,
-            typename detail::FutureItTraits<ForwardIt>::type
-        >>>
+Future<std::vector<AnyResult<detail::FutureItResultType<ForwardIt>>>>
+    WhenAll(ForwardIt first, ForwardIt last)
 {
-    using T = typename detail::FutureItTraits<ForwardIt>::type;
+    using T = detail::FutureItResultType<ForwardIt>;
     static_assert(
         std::is_nothrow_copy_assignable<T>::value,
         "Result type of futures must be no-throw copy assignable");
@@ -533,19 +548,18 @@ auto WhenAll(ForwardIt first, ForwardIt last)
     }
 
     auto state = std::make_shared<detail::WhenAllState<T>>(first->GetReactor());
-    std::size_t index = 0;
     for (auto it = first; it != last; ++it) {
         state->results.emplace_back();
         it->OnCompletion(
-            [state, index] (const T& result) {
-                state->results[index] = result; // noexcept, as per the static_assert above
+            [state, index = state->results.size()-1] (const T& result) {
+                state->results[index].value = result; // noexcept per static_assert above
                 ++(state->completed);
                 if (state->completed == state->results.size()) {
                     state->promise.SetValue(state->results);
                 }
             },
-            [state, index] (std::exception_ptr ex) {
-                state->results[index] = ex;
+            [state, index = state->results.size()-1] (std::exception_ptr ex) {
+                state->results[index].exception = ex;
                 ++(state->completed);
                 if (state->completed == state->results.size()) {
                     state->promise.SetValue(state->results);
@@ -553,6 +567,14 @@ auto WhenAll(ForwardIt first, ForwardIt last)
             });
     }
     return state->promise.GetFuture();
+}
+
+template<typename ForwardRange>
+auto WhenAll(ForwardRange&& range)
+{
+    using std::begin;
+    using std::end;
+    return WhenAll(begin(range), end(range));
 }
 
 

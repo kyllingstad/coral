@@ -419,31 +419,80 @@ TEST_F(coral_event_Chain, handlerException3)
 }
 
 
-TEST(coral_event_WhenAll, normal)
+namespace
 {
-    Reactor reactor;
-    Promise<int> promise0(reactor);
-    Promise<int> promise1(reactor);
-    Promise<int> promise2(reactor);
+    class coral_event_WhenAll : public testing::Test
+    {
+    public:
+        Reactor reactor;
+        Promise<int> promise0;
+        Promise<int> promise1;
+        Promise<int> promise2;
+        std::vector<AnyResult<int>> results;
+
+        coral_event_WhenAll()
+            : promise0(reactor)
+            , promise1(reactor)
+            , promise2(reactor)
+        {
+        }
+    };
+}
+
+TEST_F(coral_event_WhenAll, normal)
+{
     std::vector<Future<int>> futures;
     futures.push_back(promise0.GetFuture());
     futures.push_back(promise1.GetFuture());
     futures.push_back(promise2.GetFuture());
 
-    std::vector<boost::variant<std::exception_ptr, int>> results;
+    // Use iterator version
     WhenAll(futures.begin(), futures.end()).OnCompletion(
-        [&] (const std::vector<boost::variant<std::exception_ptr, int>>& v)
+        [&] (const std::vector<AnyResult<int>>& v)
     {
         results = v;
     });
-    promise0.SetValue(-1);
-    promise1.SetValue(100);
+
+    promise0.SetValue(2);
+    promise1.SetValue(3);
     reactor.Run();
     EXPECT_TRUE(results.empty());
-    promise2.SetValue(9);
+    promise2.SetValue(7);
     reactor.Run();
-    EXPECT_EQ( 3u, results.size());
-    EXPECT_EQ( -1, boost::get<int>(results[0]));
-    EXPECT_EQ(100, boost::get<int>(results[1]));
-    EXPECT_EQ(  9, boost::get<int>(results[2]));
+    EXPECT_EQ(3u, results.size());
+    EXPECT_EQ(2, results[0].value);
+    EXPECT_EQ(3, results[1].value);
+    EXPECT_EQ(7, results[2].value);
+    EXPECT_EQ(nullptr, results[0].exception);
+    EXPECT_EQ(nullptr, results[1].exception);
+    EXPECT_EQ(nullptr, results[2].exception);
+}
+
+TEST_F(coral_event_WhenAll, error)
+{
+    std::vector<Future<int>> futures;
+    futures.push_back(promise0.GetFuture());
+    futures.push_back(promise1.GetFuture());
+    futures.push_back(promise2.GetFuture());
+
+    // Use range version
+    WhenAll(futures).OnCompletion(
+        [&] (const std::vector<AnyResult<int>>& v)
+    {
+        results = v;
+    });
+
+    promise0.SetValue(2);
+    promise1.SetException(std::make_exception_ptr(std::runtime_error("")));
+    reactor.Run();
+    EXPECT_TRUE(results.empty());
+    promise2.SetValue(7);
+    reactor.Run();
+    EXPECT_EQ(3u, results.size());
+    EXPECT_EQ(2, results[0].value);
+    EXPECT_FALSE(results[1].value);
+    EXPECT_EQ(7, results[2].value);
+    EXPECT_EQ(nullptr, results[0].exception);
+    EXPECT_NE(nullptr, results[1].exception);
+    EXPECT_EQ(nullptr, results[2].exception);
 }

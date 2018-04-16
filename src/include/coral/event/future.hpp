@@ -485,14 +485,19 @@ template<typename T, typename H>
 auto Chain(Future<T> original, H&& handler)
     ->  decltype(detail::ChainedFuture<T>(std::move(original)).Then(std::forward<H>(handler)))
 {
-    return detail::ChainedFuture<T>(std::move(original)).Then(std::forward<H>(handler));
+    return detail::ChainedFuture<T>(std::move(original))
+        .Then(std::forward<H>(handler));
 }
 
 
+/// The result of one of the input operations of `WhenAll().`
 template<typename T>
 struct AnyResult
 {
+    /// Contains the result of the operation if it succeeded, otherwise empty.
     boost::optional<T> value;
+
+    /// Contains an exception pointer if the operation failed, otherwise null.
     std::exception_ptr exception;
 };
 
@@ -500,7 +505,8 @@ struct AnyResult
 namespace detail
 {
     template<typename FutureIt>
-    using FutureItResultType = typename std::iterator_traits<FutureIt>::value_type::ResultType;
+    using FutureItResultType =
+        typename std::iterator_traits<FutureIt>::value_type::ResultType;
 
     template<typename T>
     struct WhenAllState
@@ -515,20 +521,42 @@ namespace detail
 
 
 /**
- *  \brief  Creates a Future whose completion is tied to the completion
+ *  \brief  Creates a `Future` whose completion is tied to the completion
  *          of a number of other futures.
  *
- *  This function takes a sequence of Future objects and returns a single
+ *  This function takes a sequence of `Future` objects and returns a single
  *  one whose result is ready when the results of *all* the input futures
  *  are ready.
  *
+ *  The returned future will never yield an exception, regardless of the
+ *  results of the input futures.  Instead, its result value will be a vector
+ *  of type `std::vector<AnyResult>` whose size is exactly equal to the
+ *  length of the input sequence.  Its elements will be in the same order
+ *  as their corresponding input `Future`s.  Each element will contain either
+ *  a result value or an exception, never both.
+ *
+ *  The function will register completion handlers for all the input futures.
+ *  It is therefore required that `Future::Valid()` return `true` for each of
+ *  them at the time the call is made.  On return, it will be `false` for
+ *  all of them.
+ *
  *  \param [in] first
- *      An iterator to the beginning of a sequence of objects of type
+ *      A forward iterator to the beginning of a sequence of objects of type
  *      `Future<T>`, where `T` must be some type which satisfies
  *      `std::is_nothrow_copy_assignable`.
  *  \param [in] last
  *      An iterator that points one element past the end of the sequence
  *      started by `first`.
+ *
+ *  \returns
+ *      A `Future` whose result represents the collected results of the
+ *      input futures.  It never yields an exception.
+ *
+ *  \throws std::length_error
+ *      The input sequence is empty (i.e., `first == last`).
+ *  \throws std::future_error
+ *      `Future::Valid()` returns `false` for any object in the input
+ *      sequence (error code `std::future_errc::no_state`).
  */
 template<typename ForwardIt>
 Future<std::vector<AnyResult<detail::FutureItResultType<ForwardIt>>>>

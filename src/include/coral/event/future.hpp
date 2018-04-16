@@ -595,6 +595,8 @@ Future<std::vector<AnyResult<detail::FutureItResultType<ForwardIt>>>>
     return state->promise.GetFuture();
 }
 
+
+/// Range version of `WhenAll()` which simply forwards to the iterator version.
 template<typename ForwardRange>
 auto WhenAll(ForwardRange&& range)
 {

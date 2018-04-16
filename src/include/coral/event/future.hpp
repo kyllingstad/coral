@@ -552,7 +552,7 @@ namespace detail
  *      A `Future` whose result represents the collected results of the
  *      input futures.  It never yields an exception.
  *
- *  \throws std::length_error
+ *  \throws std::invalid_argument
  *      The input sequence is empty (i.e., `first == last`).
  *  \throws std::future_error
  *      `Future::Valid()` returns `false` for any object in the input
@@ -566,9 +566,7 @@ Future<std::vector<AnyResult<detail::FutureItResultType<ForwardIt>>>>
     static_assert(
         std::is_nothrow_copy_assignable<T>::value,
         "Result type of futures must be no-throw copy assignable");
-    if (first == last) {
-        throw std::length_error("Empty range");
-    }
+    CORAL_INPUT_CHECK(first != last);
     for (auto it = first; it != last; ++it) {
         if (!it->Valid()) {
             throw std::future_error(std::future_errc::no_state);

@@ -13,7 +13,7 @@ TEST(coral_event, Future_int1)
     auto future = promise.GetFuture();
     EXPECT_TRUE(future.Valid());
     int value = 0;
-    future.OnCompletion([&] (const int& i) {
+    future.OnCompletion([&] (int i) {
         value = i;
     });
     EXPECT_FALSE(future.Valid());
@@ -33,7 +33,7 @@ TEST(coral_event, Future_int2)
     EXPECT_TRUE(future.Valid());
     promise.SetValue(123);
     int value = 0;
-    future.OnCompletion([&] (const int& i) {
+    future.OnCompletion([&] (int i) {
         value = i;
     });
     EXPECT_FALSE(future.Valid());
@@ -50,7 +50,7 @@ TEST(coral_event, Future_int3)
     auto future = promise.GetFuture();
     EXPECT_TRUE(future.Valid());
     int value = 0;
-    future.OnCompletion([&] (const int& i) {
+    future.OnCompletion([&] (int i) {
         value = i;
     });
     EXPECT_FALSE(future.Valid());
@@ -115,7 +115,7 @@ TEST(coral_event, Future_int_err1)
     Promise<int> promise(reactor);
     auto future = promise.GetFuture();
     EXPECT_TRUE(future.Valid());
-    future.OnCompletion([] (const int&) { });
+    future.OnCompletion([] (int) { });
     EXPECT_FALSE(future.Valid());
     promise.SetException(std::make_exception_ptr(std::length_error("")));
     EXPECT_THROW(reactor.Run(), std::length_error);
@@ -129,7 +129,7 @@ TEST(coral_event, Future_int_err2)
     auto future = promise.GetFuture();
     EXPECT_TRUE(future.Valid());
     promise.SetException(std::make_exception_ptr(std::length_error("")));
-    future.OnCompletion([] (const int&) { });
+    future.OnCompletion([] (int) { });
     EXPECT_FALSE(future.Valid());
     EXPECT_THROW(reactor.Run(), std::length_error);
 }
@@ -142,7 +142,7 @@ TEST(coral_event, Future_int_err3)
     promise.SetException(std::make_exception_ptr(std::length_error("")));
     auto future = promise.GetFuture();
     EXPECT_TRUE(future.Valid());
-    future.OnCompletion([] (const int&) { });
+    future.OnCompletion([] (int) { });
     EXPECT_FALSE(future.Valid());
     EXPECT_THROW(reactor.Run(), std::length_error);
 }
@@ -199,7 +199,7 @@ TEST(coral_event, Future_int_broken)
         EXPECT_TRUE(future.Valid());
     }
 
-    future.OnCompletion([] (const int&) { });
+    future.OnCompletion([] (int) { });
     try {
         reactor.Run();
         ADD_FAILURE();
@@ -256,13 +256,13 @@ namespace
 
 TEST_F(coral_event_Chain, normal)
 {
-    Chain(promise1.GetFuture(), [&] (const int& i) {
+    Chain(promise1.GetFuture(), [&] (int i) {
         value1 = i;
         return promise2.GetFuture();
     }).Then([&] () {
         value2 = true;
         return promise3.GetFuture();
-    }).Then([&] (const double& d) {
+    }).Then([&] (double d) {
         value3 = d;
     }).Catch([&] (std::exception_ptr ep) {
         exception = true;
@@ -279,13 +279,13 @@ TEST_F(coral_event_Chain, normal)
 
 TEST_F(coral_event_Chain, futureException1)
 {
-    Chain(promise1.GetFuture(), [&] (const int& i) {
+    Chain(promise1.GetFuture(), [&] (int i) {
         value1 = i;
         return promise2.GetFuture();
     }).Then([&] () {
         value2 = true;
         return promise3.GetFuture();
-    }).Then([&] (const double& d) {
+    }).Then([&] (double d) {
         value3 = d;
     }).Catch([&] (std::exception_ptr ep) {
         exception = true;
@@ -302,13 +302,13 @@ TEST_F(coral_event_Chain, futureException1)
 
 TEST_F(coral_event_Chain, futureException2)
 {
-    Chain(promise1.GetFuture(), [&] (const int& i) {
+    Chain(promise1.GetFuture(), [&] (int i) {
         value1 = i;
         return promise2.GetFuture();
     }).Then([&] () {
         value2 = true;
         return promise3.GetFuture();
-    }).Then([&] (const double& d) {
+    }).Then([&] (double d) {
         value3 = d;
     }).Catch([&] (std::exception_ptr ep) {
         exception = true;
@@ -325,13 +325,13 @@ TEST_F(coral_event_Chain, futureException2)
 
 TEST_F(coral_event_Chain, futureException3)
 {
-    Chain(promise1.GetFuture(), [&] (const int& i) {
+    Chain(promise1.GetFuture(), [&] (int i) {
         value1 = i;
         return promise2.GetFuture();
     }).Then([&] () {
         value2 = true;
         return promise3.GetFuture();
-    }).Then([&] (const double& d) {
+    }).Then([&] (double d) {
         value3 = d;
     }).Catch([&] (std::exception_ptr ep) {
         exception = true;
@@ -348,14 +348,14 @@ TEST_F(coral_event_Chain, futureException3)
 
 TEST_F(coral_event_Chain, handlerException1)
 {
-    Chain(promise1.GetFuture(), [&] (const int& i) {
+    Chain(promise1.GetFuture(), [&] (int i) {
         if (value1 == 0) throw std::runtime_error("");
         value1 = i;
         return promise2.GetFuture();
     }).Then([&] () {
         value2 = true;
         return promise3.GetFuture();
-    }).Then([&] (const double& d) {
+    }).Then([&] (double d) {
         value3 = d;
     }).Catch([&] (std::exception_ptr ep) {
         exception = true;
@@ -372,14 +372,14 @@ TEST_F(coral_event_Chain, handlerException1)
 
 TEST_F(coral_event_Chain, handlerException2)
 {
-    Chain(promise1.GetFuture(), [&] (const int& i) {
+    Chain(promise1.GetFuture(), [&] (int i) {
         value1 = i;
         return promise2.GetFuture();
     }).Then([&] () {
         if (!value2) throw std::runtime_error("");
         value2 = true;
         return promise3.GetFuture();
-    }).Then([&] (const double& d) {
+    }).Then([&] (double d) {
         value3 = d;
     }).Catch([&] (std::exception_ptr ep) {
         exception = true;
@@ -396,13 +396,13 @@ TEST_F(coral_event_Chain, handlerException2)
 
 TEST_F(coral_event_Chain, handlerException3)
 {
-    Chain(promise1.GetFuture(), [&] (const int& i) {
+    Chain(promise1.GetFuture(), [&] (int i) {
         value1 = i;
         return promise2.GetFuture();
     }).Then([&] () {
         value2 = true;
         return promise3.GetFuture();
-    }).Then([&] (const double& d) {
+    }).Then([&] (double d) {
         if (value3 == 0.0) throw std::runtime_error("");
         value3 = d;
     }).Catch([&] (std::exception_ptr ep) {

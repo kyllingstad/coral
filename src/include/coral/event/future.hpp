@@ -36,7 +36,7 @@ namespace detail
     template<typename T>
     struct ResultHandler
     {
-        using Type = std::function<void(const T&)>;
+        using Type = std::function<void(T)>;
     };
 
     template<>
@@ -86,11 +86,23 @@ namespace detail
  *  Furthermore, while `std::future` is designed for use in multi-threaded
  *  code, `Future` is designed for use in single-threaded `Reactor`-based
  *  code (and is in fact not thread-safe at all).
+ *
+ *  \tparam T
+ *      The result type, which may be `void`.  If it is not `void`, it must
+ *      be movable and copyable, and its move constructor and move assignment
+ *      operator must be `noexcept`.
  */
 template<typename T>
 class Future
 {
 public:
+    static_assert(
+        std::is_nothrow_move_constructible<T>::value || std::is_void<T>::value,
+        "Future<T>: Move-constructing T may throw");
+    static_assert(
+        std::is_nothrow_move_assignable<T>::value || std::is_void<T>::value,
+        "Future<T>: Move-assigning T may throw");
+
     /// The type of the future result.
     using ResultType = T;
 
@@ -144,7 +156,7 @@ public:
      *
      *  \param [in] resultHandler
      *      The result handler, which must be a callable object with signature
-     *      `void(const T&)`, or `void()` if `T` is `void`.
+     *      `void(T)`, or `void()` if `T` is `void`.
      *
      *  \param [in] exceptionHandler
      *      The exception handler, which must be a callable object with
@@ -340,13 +352,13 @@ namespace detail
         template<typename H>
         auto Then(H&& handler)
             ->  std::enable_if_t<
-                    IsFuture<std::result_of_t<H(const T&)>>::value,
-                    ChainedFuture<typename std::result_of_t<H(const T&)>::ResultType>>;
+                    IsFuture<std::result_of_t<H(T)>>::value,
+                    ChainedFuture<typename std::result_of_t<H(T)>::ResultType>>;
 
         template<typename H>
         auto Then(H&& handler)
             ->  std::enable_if_t<
-                    std::is_void<std::result_of_t<H(const T&)>>::value,
+                    std::is_void<std::result_of_t<H(T)>>::value,
                     EndChainedFuture>;
 
         void Catch(std::function<void(std::exception_ptr)> handler);
@@ -414,10 +426,10 @@ namespace detail
  *  Normally, we'd write this as follows:
  *
  *      DoStuff().OnCompletion(
- *          [] (const int& i) {
+ *          [] (int i) {
  *              // use i for something
  *              DoMoreStuff().OnCompletion(
- *                  [] (const Foo& foo) {
+ *                  [] (Foo foo) {
  *                      // use foo for something
  *                      DoFinalStuff();
  *                  },
@@ -435,13 +447,13 @@ namespace detail
  *
  *  Now, here's the same example using `Chain()`:
  *
- *      Chain(DoStuff(), [] (const int& i) {
+ *      Chain(DoStuff(), [] (int i) {
  *          // use i for something
  *          return DoMoreStuff();
- *      }).Then([] (const Foo& foo) {
+ *      }).Then([] (Foo foo) {
  *          // use foo for something
  *          DoFinalStuff();
- *      }).Catch([] (const std::exception_ptr e) {
+ *      }).Catch([] (std::exception_ptr e) {
  *          // handle *all* errors
  *      });
  *
@@ -461,15 +473,15 @@ namespace detail
  *
  *  Each handler, except the last one, must have the following signature:
  *
- *      Future<T_I> handlerI(const T_Iminus1 &)     // if T_Iminus1 is not void
- *      Future<T_I> handlerI()                      // if T_Iminus1 is void
+ *      Future<T_I> handlerI(T_Iminus1)     // if T_Iminus1 is not void
+ *      Future<T_I> handlerI()              // if T_Iminus1 is void
  *
  *  Here, `I=1,2,…,N` and `T_0` is defined such that the type of
  *  `future` is `Future<T_0>`.  The last handler may (and generally should)
  *  have the following signature:
  *
- *      void handlerN(const T_Nminus1 &)     // if T_Nminus1 is not void
- *      void handlerN()                      // if T_Nminus1 is void
+ *      void handlerN(T_Nminus1)    // if T_Nminus1 is not void
+ *      void handlerN()             // if T_Nminus1 is void
  *
  *  Each handler will be invoked when the `Future` returned by the previous one
  *  in the chain is resolved.
@@ -542,8 +554,7 @@ namespace detail
  *
  *  \param [in] first
  *      A forward iterator to the beginning of a sequence of objects of type
- *      `Future<T>`, where `T` must be some type which satisfies
- *      `std::is_nothrow_copy_assignable`.
+ *      `Future`.
  *  \param [in] last
  *      An iterator that points one element past the end of the sequence
  *      started by `first`.
@@ -563,9 +574,6 @@ Future<std::vector<AnyResult<detail::FutureItResultType<ForwardIt>>>>
     WhenAll(ForwardIt first, ForwardIt last)
 {
     using T = detail::FutureItResultType<ForwardIt>;
-    static_assert(
-        std::is_nothrow_copy_assignable<T>::value,
-        "Result type of futures must be no-throw copy assignable");
     CORAL_INPUT_CHECK(first != last);
     for (auto it = first; it != last; ++it) {
         if (!it->Valid()) {
@@ -577,8 +585,8 @@ Future<std::vector<AnyResult<detail::FutureItResultType<ForwardIt>>>>
     for (auto it = first; it != last; ++it) {
         state->results.emplace_back();
         it->OnCompletion(
-            [state, index = state->results.size()-1] (const T& result) {
-                state->results[index].value = result; // noexcept per static_assert above
+            [state, index = state->results.size()-1] (T result) {
+                state->results[index].value = std::move(result); // noexcept per static_assert above
                 ++(state->completed);
                 if (state->completed == state->results.size()) {
                     state->promise.SetValue(state->results);
@@ -638,14 +646,14 @@ namespace detail
     };
 
     template<typename T>
-    void CallResultHandler(const SharedState<T>& state)
+    void CallResultHandler(SharedState<T>& state)
     {
         assert(state.resultHandler);
         assert(state.result);
-        state.resultHandler(*state.result);
+        state.resultHandler(std::move(*state.result));
     }
 
-    inline void CallResultHandler(const SharedState<void>& state)
+    inline void CallResultHandler(SharedState<void>& state)
     {
         assert(state.resultHandler);
         assert(state.result);
@@ -916,16 +924,16 @@ namespace detail
     template<typename H>
     auto ChainedFuture<T>::Then(H&& handler)
         ->  std::enable_if_t<
-                IsFuture<std::result_of_t<H(const T&)>>::value,
-                ChainedFuture<typename std::result_of_t<H(const T&)>::ResultType>>
+                IsFuture<std::result_of_t<H(T)>>::value,
+                ChainedFuture<typename std::result_of_t<H(T)>::ResultType>>
     {
-        using R = typename std::result_of_t<H(const T&)>::ResultType;
+        using R = typename std::result_of_t<H(T)>::ResultType;
         auto promise = std::make_shared<Promise<R>>(future_.GetReactor());
         future_.OnCompletion(
-            [handler = std::forward<H>(handler), promise] (const T& result) {
+            [handler = std::forward<H>(handler), promise] (T result) {
                 Future<R> f;
                 try {
-                    f = handler(result);
+                    f = handler(std::move(result));
                 } catch (...) {
                     promise->SetException(std::current_exception());
                     return;
@@ -944,14 +952,14 @@ namespace detail
     template<typename H>
     auto ChainedFuture<T>::Then(H&& handler)
         ->  std::enable_if_t<
-                std::is_void<std::result_of_t<H(const T&)>>::value,
+                std::is_void<std::result_of_t<H(T)>>::value,
                 EndChainedFuture>
     {
         auto promise = std::make_shared<Promise<void>>(future_.GetReactor());
         future_.OnCompletion(
-            [handler = std::forward<H>(handler), promise] (const T& result) {
+            [handler = std::forward<H>(handler), promise] (T result) {
                 try {
-                    handler(result);
+                    handler(std::move(result));
                 } catch (...) {
                     promise->SetException(std::current_exception());
                     return;
@@ -969,7 +977,7 @@ namespace detail
     template<typename T>
     void ChainedFuture<T>::Catch(std::function<void(std::exception_ptr)> handler)
     {
-        future_.OnCompletion([] (const T&) { }, std::move(handler));
+        future_.OnCompletion([] (T) { }, std::move(handler));
         future_ = Future<T>();
     }
 

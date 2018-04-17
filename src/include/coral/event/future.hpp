@@ -788,6 +788,7 @@ namespace detail
         }
     }
 
+    inline
     void SetValue(std::shared_ptr<SharedState<void>> state)
     {
         EnforceUnsatisfied(state);
@@ -859,31 +860,36 @@ void Promise<T>::SetException(std::exception_ptr ep)
 // =============================================================================
 
 
-inline Promise<void>::Promise(Reactor& reactor)
+inline
+Promise<void>::Promise(Reactor& reactor)
     : m_state(std::make_shared<detail::SharedState<void>>(reactor))
 {
 }
 
 
-inline Promise<void>::~Promise()
+inline
+Promise<void>::~Promise()
 {
     detail::PromiseDtor(m_state);
 }
 
 
-inline Future<void> Promise<void>::GetFuture()
+inline
+Future<void> Promise<void>::GetFuture()
 {
     return detail::GetFuture(m_state);
 }
 
 
-inline void Promise<void>::SetValue()
+inline
+void Promise<void>::SetValue()
 {
     detail::SetValue(m_state);
 }
 
 
-inline void Promise<void>::SetException(std::exception_ptr ep)
+inline
+void Promise<void>::SetException(std::exception_ptr ep)
 {
     detail::SetException(m_state, ep);
 }
@@ -903,6 +909,7 @@ namespace detail
             [promise] (std::exception_ptr ep) { promise->SetException(ep); });
     }
 
+    inline
     void Chain_(Future<void> future, std::shared_ptr<Promise<void>> promise)
     {
         future.OnCompletion(
@@ -986,13 +993,14 @@ namespace detail
 
 namespace detail
 {
-    inline ChainedFuture<void>::ChainedFuture(Future<void> future)
+    inline
+    ChainedFuture<void>::ChainedFuture(Future<void> future)
         : future_(std::move(future))
     { }
 
 
     template<typename H>
-    inline auto ChainedFuture<void>::Then(H&& handler)
+    auto ChainedFuture<void>::Then(H&& handler)
         ->  std::enable_if_t<
                 IsFuture<std::result_of_t<H()>>::value,
                 ChainedFuture<typename std::result_of_t<H()>::ResultType>>
@@ -1019,7 +1027,7 @@ namespace detail
 
 
     template<typename H>
-    inline auto ChainedFuture<void>::Then(H&& handler)
+    auto ChainedFuture<void>::Then(H&& handler)
         ->  std::enable_if_t<
                 std::is_void<std::result_of_t<H()>>::value,
                 EndChainedFuture>
@@ -1043,7 +1051,8 @@ namespace detail
     }
 
 
-    inline void ChainedFuture<void>::Catch(
+    inline
+    void ChainedFuture<void>::Catch(
         std::function<void(std::exception_ptr)> handler)
     {
         future_.OnCompletion([] () { }, std::move(handler));
@@ -1058,12 +1067,14 @@ namespace detail
 
 namespace detail
 {
-    inline EndChainedFuture::EndChainedFuture(Future<void> future)
+    inline
+    EndChainedFuture::EndChainedFuture(Future<void> future)
         : future_(std::move(future))
     { }
 
 
-    inline void EndChainedFuture::Catch(
+    inline
+    void EndChainedFuture::Catch(
         std::function<void(std::exception_ptr)> handler)
     {
         future_.OnCompletion([] () { }, std::move(handler));

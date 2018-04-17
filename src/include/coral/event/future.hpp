@@ -34,16 +34,13 @@ namespace detail
     template<typename T> struct SharedState;
 
     template<typename T>
-    struct ResultHandler
-    {
-        using Type = std::function<void(T)>;
-    };
+    struct ResultHandlerType_s { using Type = std::function<void(T)>; };
 
     template<>
-    struct ResultHandler<void>
-    {
-        using Type = std::function<void()>;
-    };
+    struct ResultHandlerType_s<void> { using Type = std::function<void()>; };
+
+    template<typename T>
+    using ResultHandlerType = typename ResultHandlerType_s<T>::Type;
 }
 
 
@@ -171,7 +168,7 @@ public:
      *  \post `Valid()` returns `false`.
      */
     void OnCompletion(
-        typename detail::ResultHandler<T>::Type resultHandler,
+        detail::ResultHandlerType<T> resultHandler,
         std::function<void(std::exception_ptr)> exceptionHandler = std::rethrow_exception);
 
     /**
@@ -638,7 +635,7 @@ namespace detail
         bool futureRetrieved = false;
         bool resultRetrieved = false;
 
-        typename ResultHandler<T>::Type resultHandler = nullptr;
+        ResultHandlerType<T> resultHandler = nullptr;
         std::function<void(std::exception_ptr)> exceptionHandler = nullptr;
 
         typename ResultStorage<T>::Type result = typename ResultStorage<T>::Type();
@@ -719,7 +716,7 @@ Future<T>& Future<T>::operator=(Future&& other) CORAL_NOEXCEPT
 
 template<typename T>
 void Future<T>::OnCompletion(
-    typename detail::ResultHandler<T>::Type resultHandler,
+    detail::ResultHandlerType<T> resultHandler,
     std::function<void(std::exception_ptr)> exceptionHandler)
 {
     CORAL_PRECONDITION_CHECK(Valid());

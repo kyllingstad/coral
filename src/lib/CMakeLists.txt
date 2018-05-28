@@ -170,6 +170,7 @@ target_link_libraries(${_target}
         "Boost::filesystem"
         "Boost::program_options"
         "Boost::random"
+        "gsl"
 )
 if (WIN32)
     target_link_libraries (${_target} INTERFACE "ws2_32" "iphlpapi" "bcrypt")

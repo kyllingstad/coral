@@ -79,28 +79,69 @@ namespace
             return true;
         }
 
-        double GetRealVariable(coral::model::VariableID variable) const override
+        void GetRealVariables(
+            gsl::span<const coral::model::VariableID> variables,
+            gsl::span<double> values) const override
         {
-            return m_currentValues[variable];
+            for (int i = 0; i < variables.size(); ++i) {
+                values[i] = m_currentValues[variables[i]];
+            }
         }
 
-        int GetIntegerVariable(coral::model::VariableID /*variable*/) const override { assert(false); return 0; }
-
-        bool GetBooleanVariable(coral::model::VariableID /*variable*/) const override { assert(false); return false; }
-
-        std::string GetStringVariable(coral::model::VariableID /*variable*/) const override { assert(false); return std::string(); }
-
-        bool SetRealVariable(coral::model::VariableID variable, double value) override
+        void GetIntegerVariables(
+            gsl::span<const coral::model::VariableID> /* variables */,
+            gsl::span<int> /* values */) const override
         {
-            m_currentValues[variable] = value;
+            assert(false);
+        }
+
+        void GetBooleanVariables(
+            gsl::span<const coral::model::VariableID> /* variables */,
+            gsl::span<bool> /* values */) const override
+        {
+            assert(false);
+        }
+
+        void GetStringVariables(
+            gsl::span<const coral::model::VariableID> /* variables */,
+            gsl::span<std::string> /* values */) const override
+        {
+            assert(false);
+        }
+
+        bool SetRealVariables(
+            gsl::span<const coral::model::VariableID> variables,
+            gsl::span<const double> values) override
+        {
+            for (int i = 0; i < variables.size(); ++i) {
+                m_currentValues[variables[i]] = values[i];
+            }
             return true;
         }
 
-        bool SetIntegerVariable(coral::model::VariableID /*variable*/, int /*value*/) override { assert(false); return false; }
+        bool SetIntegerVariables(
+            gsl::span<const coral::model::VariableID> /* variables */,
+            gsl::span<const int> /* values */) override
+        {
+            assert(false);
+            return false;
+        }
 
-        bool SetBooleanVariable(coral::model::VariableID /*variable*/, bool /*value*/) override { assert(false); return false; }
+        bool SetBooleanVariables(
+            gsl::span<const coral::model::VariableID> /* variables */,
+            gsl::span<const bool> /* values */) override
+        {
+            assert(false);
+            return false;
+        }
 
-        bool SetStringVariable(coral::model::VariableID /*variable*/, const std::string& /*value*/) override { assert(false); return false; }
+        bool SetStringVariables(
+            gsl::span<const coral::model::VariableID> /* variables */,
+            gsl::span<const std::string> /* values */) override
+        {
+            assert(false);
+            return false;
+        }
 
     private:
         std::size_t m_inputCount;

@@ -249,19 +249,19 @@ namespace
             : m_slaveInstance(slaveInstance), m_varRef(varRef) { }
         bool operator()(double value) const
         {
-            return m_slaveInstance.SetRealVariable(m_varRef, value);
+            return m_slaveInstance.SetRealVariables(gsl::make_span(&m_varRef, 1), gsl::make_span(&value, 1));
         }
         bool operator()(int value) const
         {
-            return m_slaveInstance.SetIntegerVariable(m_varRef, value);
+            return m_slaveInstance.SetIntegerVariables(gsl::make_span(&m_varRef, 1), gsl::make_span(&value, 1));
         }
         bool operator()(bool value) const
         {
-            return m_slaveInstance.SetBooleanVariable(m_varRef, value);
+            return m_slaveInstance.SetBooleanVariables(gsl::make_span(&m_varRef, 1), gsl::make_span(&value, 1));
         }
         bool operator()(const std::string& value) const
         {
-            return m_slaveInstance.SetStringVariable(m_varRef, value);
+            return m_slaveInstance.SetStringVariables(gsl::make_span(&m_varRef, 1), gsl::make_span(&value, 1));
         }
     private:
         coral::slave::Instance& m_slaveInstance;
@@ -363,15 +363,40 @@ namespace
         const coral::slave::Instance& slave,
         const coral::model::VariableDescription& variable)
     {
+        const auto varID = variable.ID();
         switch (variable.DataType()) {
             case coral::model::REAL_DATATYPE:
-                return slave.GetRealVariable(variable.ID());
+                {
+                    double value = 0.0;
+                    slave.GetRealVariables(
+                        gsl::make_span(&varID, 1),
+                        gsl::make_span(&value, 1));
+                    return value;
+                }
             case coral::model::INTEGER_DATATYPE:
-                return slave.GetIntegerVariable(variable.ID());
+                {
+                    int value = 0;
+                    slave.GetIntegerVariables(
+                        gsl::make_span(&varID, 1),
+                        gsl::make_span(&value, 1));
+                    return value;
+                }
             case coral::model::BOOLEAN_DATATYPE:
-                return slave.GetBooleanVariable(variable.ID());
+                {
+                    bool value = false;
+                    slave.GetBooleanVariables(
+                        gsl::make_span(&varID, 1),
+                        gsl::make_span(&value, 1));
+                    return value;
+                }
             case coral::model::STRING_DATATYPE:
-                return slave.GetStringVariable(variable.ID());
+                {
+                    std::string value;
+                    slave.GetStringVariables(
+                        gsl::make_span(&varID, 1),
+                        gsl::make_span(&value, 1));
+                    return value;
+                }
             default:
                 assert (!"Variable has unknown data type");
                 return coral::model::ScalarValue();

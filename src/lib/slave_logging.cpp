@@ -110,18 +110,35 @@ namespace
         Instance& slaveInstance)
     {
         out << ",";
+        const auto varID = varInfo.ID();
         switch (varInfo.DataType()) {
             case coral::model::REAL_DATATYPE:
-                out << slaveInstance.GetRealVariable(varInfo.ID());
+                {
+                    double val = 0.0;
+                    slaveInstance.GetRealVariables(gsl::make_span(&varID, 1), gsl::make_span(&val, 1));
+                    out << val;
+                }
                 break;
             case coral::model::INTEGER_DATATYPE:
-                out << slaveInstance.GetIntegerVariable(varInfo.ID());
+                {
+                    int val = 0;
+                    slaveInstance.GetIntegerVariables(gsl::make_span(&varID, 1), gsl::make_span(&val, 1));
+                    out << val;
+                }
                 break;
             case coral::model::BOOLEAN_DATATYPE:
-                out << slaveInstance.GetBooleanVariable(varInfo.ID());
+                {
+                    bool val = false;
+                    slaveInstance.GetBooleanVariables(gsl::make_span(&varID, 1), gsl::make_span(&val, 1));
+                    out << val;
+                }
                 break;
             case coral::model::STRING_DATATYPE:
-                out << slaveInstance.GetStringVariable(varInfo.ID());
+                {
+                    std::string val;
+                    slaveInstance.GetStringVariables(gsl::make_span(&varID, 1), gsl::make_span(&val, 1));
+                    out << val;
+                }
                 break;
             default:
                 assert (false);
@@ -147,51 +164,67 @@ bool LoggingInstance::DoStep(
 }
 
 
-double LoggingInstance::GetRealVariable(coral::model::VariableID varRef) const
+void LoggingInstance::GetRealVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<double> values) const
 {
-    return m_instance->GetRealVariable(varRef);
+    m_instance->GetRealVariables(variables, values);
 }
 
 
-int LoggingInstance::GetIntegerVariable(coral::model::VariableID varRef) const
+void LoggingInstance::GetIntegerVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<int> values) const
 {
-    return m_instance->GetIntegerVariable(varRef);
+    m_instance->GetIntegerVariables(variables, values);
 }
 
 
-bool LoggingInstance::GetBooleanVariable(coral::model::VariableID varRef) const
+void LoggingInstance::GetBooleanVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<bool> values) const
 {
-    return m_instance->GetBooleanVariable(varRef);
+    m_instance->GetBooleanVariables(variables, values);
 }
 
 
-std::string LoggingInstance::GetStringVariable(coral::model::VariableID varRef) const
+void LoggingInstance::GetStringVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<std::string> values) const
 {
-    return m_instance->GetStringVariable(varRef);
+    m_instance->GetStringVariables(variables, values);
 }
 
 
-bool LoggingInstance::SetRealVariable(coral::model::VariableID varRef, double value)
+bool LoggingInstance::SetRealVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<const double> values)
 {
-    return m_instance->SetRealVariable(varRef, value);
+    return m_instance->SetRealVariables(variables, values);
 }
 
 
-bool LoggingInstance::SetIntegerVariable(coral::model::VariableID varRef, int value)
+bool LoggingInstance::SetIntegerVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<const int> values)
 {
-    return m_instance->SetIntegerVariable(varRef, value);
+    return m_instance->SetIntegerVariables(variables, values);
 }
 
 
-bool LoggingInstance::SetBooleanVariable(coral::model::VariableID varRef, bool value)
+bool LoggingInstance::SetBooleanVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<const bool> values)
 {
-    return m_instance->SetBooleanVariable(varRef, value);
+    return m_instance->SetBooleanVariables(variables, values);
 }
 
 
-bool LoggingInstance::SetStringVariable(coral::model::VariableID varRef, const std::string& value)
+bool LoggingInstance::SetStringVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<const std::string> values)
 {
-    return m_instance->SetStringVariable(varRef, value);
+    return m_instance->SetStringVariables(variables, values);
 }
 
 

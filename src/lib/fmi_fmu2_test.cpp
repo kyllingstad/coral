@@ -40,12 +40,18 @@ TEST(coral_fmi, Fmu2)
             foundValve = true;
             EXPECT_EQ(coral::model::CONTINUOUS_VARIABILITY, v.Variability());
             EXPECT_EQ(coral::model::OUTPUT_CAUSALITY, v.Causality());
-            EXPECT_EQ(0.0, instance->GetRealVariable(v.ID()));
+            const auto varID = v.ID();
+            double varVal = -1.0;
+            instance->GetRealVariables(gsl::make_span(&varID, 1), gsl::make_span(&varVal, 1));
+            EXPECT_EQ(0.0, varVal);
         } else if (v.Name() == "minlevel") {
             foundMinlevel = true;
             EXPECT_EQ(coral::model::FIXED_VARIABILITY, v.Variability());
             EXPECT_EQ(coral::model::PARAMETER_CAUSALITY, v.Causality());
-            EXPECT_EQ(1.0, instance->GetRealVariable(v.ID()));
+            const auto varID = v.ID();
+            double varVal = -1.0;
+            instance->GetRealVariables(gsl::make_span(&varID, 1), gsl::make_span(&varVal, 1));
+            EXPECT_EQ(1.0, varVal);
         }
     }
     EXPECT_TRUE(foundValve);

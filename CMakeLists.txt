@@ -146,6 +146,7 @@ else ()
     set (testBoostLibs)
 endif ()
 
+find_package (GSL REQUIRED)
 find_package (Boost
     REQUIRED
     COMPONENTS filesystem program_options random ${testBoostLibs}

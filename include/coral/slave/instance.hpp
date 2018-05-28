@@ -11,6 +11,7 @@
 #define CORAL_SLAVE_INSTANCE_HPP
 
 #include <string>
+#include <gsl/span>
 #include <coral/model.hpp>
 
 namespace coral
@@ -26,12 +27,12 @@ The function call sequence is as follows:
 
   1. `Setup()`:
         Configure the slave and enter initialisation mode.
-  2. `Get...Variable()`, `Set...Variable()`:
+  2. `Get...Variables()`, `Set...Variables()`:
         Variable initialisation.  The functions may be called multiple times
         in any order.
   3. `StartSimulation()`:
         End initialisation mode, start simulation.
-  4. `DoStep()`, `Get...Variable()`, `Set...Variable()`:
+  4. `DoStep()`, `Get...Variables()`, `Set...Variables()`:
         Simulation.  The functions may be called multiple times in any order.
   5. `EndSimulation()`:
         End simulation.
@@ -113,72 +114,116 @@ public:
         coral::model::TimeDuration deltaT) = 0;
 
     /**
-    \brief  Returns the value of a real variable.
-    \throws std::logic_error if there is no real variable with the given ID.
+    \brief  Retrieves the values of real variables.
+
+    On return, the `values` array will be filled with the values of the
+    variables specified in `variables`, in the same order.
+
+    \pre `variables.size() == values.size()`
     */
-    virtual double GetRealVariable(coral::model::VariableID variable) const = 0;
+    virtual void GetRealVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<double> values) const = 0;
 
     /**
-    \brief  Returns the value of an integer variable.
-    \throws std::logic_error if there is no integer variable with the given ID.
+    \brief  Retrieves the values of integer variables.
+
+    On return, the `values` array will be filled with the values of the
+    variables specified in `variables`, in the same order.
+
+    \pre `variables.size() == values.size()`
     */
-    virtual int GetIntegerVariable(coral::model::VariableID variable) const = 0;
+    virtual void GetIntegerVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<int> values) const = 0;
 
     /**
-    \brief  Returns the value of a boolean variable.
-    \throws std::logic_error if there is no boolean variable with the given ID.
+    \brief  Retrieves the values of boolean variables.
+
+    On return, the `values` array will be filled with the values of the
+    variables specified in `variables`, in the same order.
+
+    \pre `variables.size() == values.size()`
     */
-    virtual bool GetBooleanVariable(coral::model::VariableID variable) const = 0;
+    virtual void GetBooleanVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<bool> values) const = 0;
 
     /**
-    \brief  Returns the value of a string variable.
-    \throws std::logic_error if there is no string variable with the given ID.
+    \brief  Retrieves the values of string variables.
+
+    On return, the `values` array will be filled with the values of the
+    variables specified in `variables`, in the same order.
+
+    \pre `variables.size() == values.size()`
     */
-    virtual std::string GetStringVariable(coral::model::VariableID variable) const = 0;
+    virtual void GetStringVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<std::string> values) const = 0;
 
     /**
-    \brief  Sets the value of a real variable.
+    \brief  Sets the values of real variables.
+
+    This will set the value of each variable specified in the `variables`
+    array to the value given in the corresponding element of `values`.
 
     \returns
-        Whether the value was set successfully.  This could be `false` if,
-        for example, the value is out of range.
-    \throws std::logic_error
-        If there is no real variable with the given ID.
+        `true` if successful and `false` if one or more values were invalid
+        (e.g. out of range for the given variables).
+
+    \pre `variables.size() == values.size()`
     */
-    virtual bool SetRealVariable(coral::model::VariableID variable, double value) = 0;
+    virtual bool SetRealVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<const double> values) = 0;
 
     /**
-    \brief  Sets the value of an integer variable.
+    \brief  Sets the values of integer variables.
+
+    This will set the value of each variable specified in the `variables`
+    array to the value given in the corresponding element of `values`.
 
     \returns
-        Whether the value was set successfully.  This could be `false` if,
-        for example, the value is out of range.
-    \throws std::logic_error
-        If there is no integer variable with the given ID.
+        `true` if successful and `false` if one or more values were invalid
+        (e.g. out of range for the given variables).
+
+    \pre `variables.size() == values.size()`
     */
-    virtual bool SetIntegerVariable(coral::model::VariableID variable, int value) = 0;
+    virtual bool SetIntegerVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<const int> values) = 0;
 
     /**
-    \brief  Sets the value of a boolean variable.
+    \brief  Sets the values of boolean variables.
+
+    This will set the value of each variable specified in the `variables`
+    array to the value given in the corresponding element of `values`.
 
     \returns
-        Whether the value was set successfully.  This could be `false` if,
-        for example, the value is out of range.
-    \throws std::logic_error
-        If there is no boolean variable with the given ID.
+        `true` if successful and `false` if one or more values were invalid
+        (e.g. out of range for the given variables).
+
+    \pre `variables.size() == values.size()`
     */
-    virtual bool SetBooleanVariable(coral::model::VariableID variable, bool value) = 0;
+    virtual bool SetBooleanVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<const bool> values) = 0;
 
     /**
-    \brief  Sets the value of a string variable.
+    \brief  Sets the values of string variables.
+
+    This will set the value of each variable specified in the `variables`
+    array to the value given in the corresponding element of `values`.
 
     \returns
-        Whether the value was set successfully.  This could be `false` if,
-        for example, the value is out of range.
-    \throws std::logic_error
-        If there is no string variable with the given ID.
+        `true` if successful and `false` if one or more values were invalid
+        (e.g. out of range for the given variables).
+
+    \pre `variables.size() == values.size()`
     */
-    virtual bool SetStringVariable(coral::model::VariableID variable, const std::string& value) = 0;
+    virtual bool SetStringVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<const std::string> values) = 0;
 
     // Because it's an interface:
     virtual ~Instance() { }

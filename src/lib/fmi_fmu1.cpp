@@ -13,11 +13,14 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #include <cstring>
 #include <mutex>
 #include <stdexcept>
+#include <type_traits>
 #include <unordered_map>
+#include <vector>
 
 #include <boost/numeric/conversion/cast.hpp>
 #include <fmilib.h>
 
+#include <coral/error.hpp>
 #include <coral/fmi/glue.hpp>
 #include <coral/fmi/importer.hpp>
 #include <coral/log.hpp>
@@ -385,131 +388,177 @@ bool SlaveInstance1::DoStep(
 
 namespace
 {
+    // This is only temporary, until we start using FMI value refs as
+    // variable IDs.
+    std::vector<fmi1_value_reference_t> FMIValueReferences(
+        gsl::span<const coral::model::VariableID> id,
+        const FMU1& fmu)
+    {
+        std::vector<fmi1_value_reference_t> vr(id.size());
+        for (int i = 0; i < id.size(); ++i) {
+            vr[i] = fmu.FMIValueReference(id[i]);
+        }
+        return vr;
+    }
+
     std::runtime_error MakeGetOrSetException(
         const std::string& getOrSet,
-        coral::model::VariableID varID,
-        const FMU1& fmu,
         const std::string& instanceName)
     {
         return std::runtime_error(
-            "Failed to " + getOrSet + "value of variable with ID "
-            + std::to_string(varID) + " and FMI value reference "
-            + std::to_string(fmu.FMIValueReference(varID))
-            + " (" + LastLogRecord(instanceName).message + ")");
+            "Failed to " + getOrSet + " one or more variable values: "
+            + LastLogRecord(instanceName).message);
     }
 }
 
 
-double SlaveInstance1::GetRealVariable(coral::model::VariableID varID) const
+void SlaveInstance1::GetRealVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<double> values) const
 {
-    assert(m_setupComplete);
-    const auto valRef = m_fmu->FMIValueReference(varID);
-    fmi1_real_t value = 0.0;
-    const auto status = fmi1_import_get_real(m_handle, &valRef, 1, &value);
+    CORAL_INPUT_CHECK(variables.size() == values.size());
+    const auto valRefs = FMIValueReferences(variables, *m_fmu);
+    static_assert (std::is_same<double, fmi1_real_t>::value, "type size mismatch");
+    const auto status = fmi1_import_get_real(
+        m_handle, valRefs.data(), valRefs.size(), values.data());
     if (status != fmi1_status_ok && status != fmi1_status_warning) {
-        throw MakeGetOrSetException("get", varID, *FMU1(), m_instanceName);
+        throw MakeGetOrSetException("get", m_instanceName);
     }
-    return value;
 }
 
 
-int SlaveInstance1::GetIntegerVariable(coral::model::VariableID varID) const
+void SlaveInstance1::GetIntegerVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<int> values) const
 {
-    assert(m_setupComplete);
-    const auto valRef = m_fmu->FMIValueReference(varID);
-    fmi1_integer_t value = 0;
-    const auto status = fmi1_import_get_integer(m_handle, &valRef, 1, &value);
+    CORAL_INPUT_CHECK(variables.size() == values.size());
+    const auto valRefs = FMIValueReferences(variables, *m_fmu);
+    static_assert (std::is_same<int, fmi1_integer_t>::value, "type size mismatch");
+    const auto status = fmi1_import_get_integer(
+        m_handle, valRefs.data(), valRefs.size(), values.data());
     if (status != fmi1_status_ok && status != fmi1_status_warning) {
-        throw MakeGetOrSetException("get", varID, *FMU1(), m_instanceName);
+        throw MakeGetOrSetException("get", m_instanceName);
     }
-    return value;
 }
 
 
-bool SlaveInstance1::GetBooleanVariable(coral::model::VariableID varID) const
+void SlaveInstance1::GetBooleanVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<bool> values) const
 {
-    assert(m_setupComplete);
-    const auto valRef = m_fmu->FMIValueReference(varID);
-    fmi1_boolean_t value = 0;
-    const auto status = fmi1_import_get_boolean(m_handle, &valRef, 1, &value);
+    CORAL_INPUT_CHECK(variables.size() == values.size());
+    const auto valRefs = FMIValueReferences(variables, *m_fmu);
+
+    std::vector<fmi1_boolean_t> fmiValues(values.size());
+    const auto status = fmi1_import_get_boolean(
+        m_handle, valRefs.data(), valRefs.size(), fmiValues.data());
     if (status != fmi1_status_ok && status != fmi1_status_warning) {
-        throw MakeGetOrSetException("get", varID, *FMU1(), m_instanceName);
+        throw MakeGetOrSetException("get", m_instanceName);
     }
-    return value != 0;
+    for (int i = 0; i < values.size(); ++i) {
+        values[i] = (fmiValues[i] != 0);
+    }
 }
 
 
-std::string SlaveInstance1::GetStringVariable(coral::model::VariableID varID) const
+void SlaveInstance1::GetStringVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<std::string> values) const
 {
-    assert(m_setupComplete);
-    const auto valRef = m_fmu->FMIValueReference(varID);
-    fmi1_string_t value = nullptr;
-    const auto status = fmi1_import_get_string(m_handle, &valRef, 1, &value);
+    CORAL_INPUT_CHECK(variables.size() == values.size());
+    const auto valRefs = FMIValueReferences(variables, *m_fmu);
+
+    std::vector<fmi1_string_t> fmiValues(values.size());
+    const auto status = fmi1_import_get_string(
+        m_handle, valRefs.data(), valRefs.size(), fmiValues.data());
     if (status != fmi1_status_ok && status != fmi1_status_warning) {
-        throw MakeGetOrSetException("get", varID, *FMU1(), m_instanceName);
+        throw MakeGetOrSetException("get", m_instanceName);
     }
-    return value ? std::string(value) : std::string();
+    for (int i = 0; i < values.size(); ++i) {
+        values[i] = (fmiValues[i] == nullptr) ? std::string()
+                                              : std::string(fmiValues[i]);
+    }
 }
 
 
-bool SlaveInstance1::SetRealVariable(coral::model::VariableID varID, double value)
+bool SlaveInstance1::SetRealVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<const double> values)
 {
-    assert(m_setupComplete);
-    const auto valRef = m_fmu->FMIValueReference(varID);
-    const auto status = fmi1_import_set_real(m_handle, &valRef, 1, &value);
+    CORAL_INPUT_CHECK(variables.size() == values.size());
+    const auto valRefs = FMIValueReferences(variables, *m_fmu);
+    static_assert (std::is_same<double, fmi1_real_t>::value, "type size mismatch");
+    const auto status = fmi1_import_set_real(
+        m_handle, valRefs.data(), valRefs.size(), values.data());
     if (status == fmi1_status_ok || status == fmi1_status_warning) {
         return true;
     } else if (status == fmi1_status_discard) {
         return false;
     } else {
-        throw MakeGetOrSetException("set", varID, *FMU1(), m_instanceName);
+        throw MakeGetOrSetException("set", m_instanceName);
     }
 }
 
 
-bool SlaveInstance1::SetIntegerVariable(coral::model::VariableID varID, int value)
+bool SlaveInstance1::SetIntegerVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<const int> values)
 {
-    assert(m_setupComplete);
-    const auto valRef = m_fmu->FMIValueReference(varID);
-    const auto status = fmi1_import_set_integer(m_handle, &valRef, 1, &value);
+    CORAL_INPUT_CHECK(variables.size() == values.size());
+    const auto valRefs = FMIValueReferences(variables, *m_fmu);
+    static_assert (std::is_same<int, fmi1_integer_t>::value, "type size mismatch");
+    const auto status = fmi1_import_set_integer(
+        m_handle, valRefs.data(), valRefs.size(), values.data());
     if (status == fmi1_status_ok || status == fmi1_status_warning) {
         return true;
     } else if (status == fmi1_status_discard) {
         return false;
     } else {
-        throw MakeGetOrSetException("set", varID, *FMU1(), m_instanceName);
+        throw MakeGetOrSetException("set", m_instanceName);
     }
 }
 
 
-bool SlaveInstance1::SetBooleanVariable(coral::model::VariableID varID, bool value)
+bool SlaveInstance1::SetBooleanVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<const bool> values)
 {
-    assert(m_setupComplete);
-    fmi1_boolean_t fmiValue = value;
-    const auto valRef = m_fmu->FMIValueReference(varID);
-    const auto status = fmi1_import_set_boolean(m_handle, &valRef, 1, &fmiValue);
+    CORAL_INPUT_CHECK(variables.size() == values.size());
+    const auto valRefs = FMIValueReferences(variables, *m_fmu);
+    std::vector<fmi1_boolean_t> fmiValues(values.size());
+    for (int i = 0; i < values.size(); ++i) {
+        fmiValues[i] = values[i] ? fmi1_true : fmi1_false;
+    }
+    const auto status = fmi1_import_set_boolean(
+        m_handle, valRefs.data(), valRefs.size(), fmiValues.data());
     if (status == fmi1_status_ok || status == fmi1_status_warning) {
         return true;
     } else if (status == fmi1_status_discard) {
         return false;
     } else {
-        throw MakeGetOrSetException("set", varID, *FMU1(), m_instanceName);
+        throw MakeGetOrSetException("set", m_instanceName);
     }
 }
 
 
-bool SlaveInstance1::SetStringVariable(coral::model::VariableID varID, const std::string& value)
+bool SlaveInstance1::SetStringVariables(
+    gsl::span<const coral::model::VariableID> variables,
+    gsl::span<const std::string> values)
 {
-    assert(m_setupComplete);
-    const auto fmiValue = value.c_str();
-    const auto valRef = m_fmu->FMIValueReference(varID);
-    const auto status = fmi1_import_set_string(m_handle, &valRef, 1, &fmiValue);
+    CORAL_INPUT_CHECK(variables.size() == values.size());
+    const auto valRefs = FMIValueReferences(variables, *m_fmu);
+    std::vector<fmi1_string_t> fmiValues(values.size());
+    for (int i = 0; i < values.size(); ++i) {
+        fmiValues[i] = values[i].c_str();
+    }
+    const auto status = fmi1_import_set_string(
+        m_handle, valRefs.data(), valRefs.size(), fmiValues.data());
     if (status == fmi1_status_ok || status == fmi1_status_warning) {
         return true;
     } else if (status == fmi1_status_discard) {
         return false;
     } else {
-        throw MakeGetOrSetException("set", varID, *FMU1(), m_instanceName);
+        throw MakeGetOrSetException("set", m_instanceName);
     }
 }
 

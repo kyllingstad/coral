@@ -144,15 +144,31 @@ public:
 
     bool DoStep(coral::model::TimePoint currentT, coral::model::TimeDuration deltaT) override;
 
-    double GetRealVariable(coral::model::VariableID variable) const override;
-    int GetIntegerVariable(coral::model::VariableID variable) const override;
-    bool GetBooleanVariable(coral::model::VariableID variable) const override;
-    std::string GetStringVariable(coral::model::VariableID variable) const override;
+    void GetRealVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<double> values) const override;
+    void GetIntegerVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<int> values) const override;
+    void GetBooleanVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<bool> values) const override;
+    void GetStringVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<std::string> values) const override;
 
-    bool SetRealVariable(coral::model::VariableID variable, double value) override;
-    bool SetIntegerVariable(coral::model::VariableID variable, int value) override;
-    bool SetBooleanVariable(coral::model::VariableID variable, bool value) override;
-    bool SetStringVariable(coral::model::VariableID variable, const std::string& value) override;
+    bool SetRealVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<const double> values) override;
+    bool SetIntegerVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<const int> values) override;
+    bool SetBooleanVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<const bool> values) override;
+    bool SetStringVariables(
+        gsl::span<const coral::model::VariableID> variables,
+        gsl::span<const std::string> values) override;
 
     // coral::fmi::SlaveInstance methods
     std::shared_ptr<coral::fmi::FMU> FMU() const override;

@@ -27,6 +27,9 @@ install:
   - sudo apt-get install -y libunwind8
   - sudo dpkg -i libzmq5_4.2.5_amd64.deb libzmq3-dev_4.2.5_amd64.deb libnorm1_1.5r6+dfsg1-1_amd64.deb libpgm-5.2-0_5.2.122~dfsg-2_amd64.deb libsodium18_1.0.11-1_amd64.deb
 
+  - curl -fsSL https://github.com/Microsoft/GSL/archive/v1.0.0.tar.gz | tar -zxf -
+  - sudo cp -r GSL-1.0.0/include/gsl /usr/include
+
   - sudo wget -P /usr/include https://raw.githubusercontent.com/zeromq/cppzmq/v4.2.3/zmq.hpp
 
   - curl -fsSL https://github.com/google/googletest/archive/release-1.8.0.tar.gz | tar -zxf -

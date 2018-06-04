@@ -1,0 +1,79 @@
+syntax="proto2";
+package coralproto.slave;
+
+import "model.proto";
+
+message Error
+{
+    enum Code
+    {
+        UNSPECIFIED = 0;
+    }
+    required Code code = 1;
+    optional bool fatal = 2 [default=false];
+    optional string msg = 3;
+}
+
+message TypeDescriptionReply
+{
+    optional Error error = 1;
+    optional model.SlaveTypeDescription type_description = 2;
+}
+
+message SetupRequest
+{
+    optional string slave_name = 1;
+    optional string execution_name = 2;
+    optional double start_time = 3 [default=0.0];
+    optional double stop_time = 4;
+    optional bool adaptive_step_size = 5 [default=false];
+    optional double relative_tolerance = 6;
+}
+
+message SetupReply
+{
+    optional Error error = 1;
+}
+
+message StartSimulationReply
+{
+    optional Error error = 1;
+}
+
+message EndSimulationReply
+{
+    optional Error error = 1;
+}
+
+message DoStepRequest
+{
+    required double time_point = 1;
+    required double step_size = 2;
+}
+
+message DoStepReply
+{
+    optional Error error = 1;
+}
+
+message GetRealVariablesRequest
+{
+    repeated uint32 variables = 1 [packed=true];
+}
+
+message GetRealVariablesReply
+{
+    optional Error error = 1;
+    repeated double values = 2 [packed=true];
+}
+
+message SetRealVariablesRequest
+{
+    repeated uint32 variables = 1 [packed=true];
+    repeated double values = 2 [packed=true];
+}
+
+message SetRealVariablesReply
+{
+    optional Error error = 1;
+}

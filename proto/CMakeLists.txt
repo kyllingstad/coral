@@ -5,6 +5,7 @@ set (protoFiles
     "exe_data.proto"
     "model.proto"
     "net.proto"
+    "slave.proto"
     "testing.proto"
 )
 

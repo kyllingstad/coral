@@ -166,6 +166,8 @@ target_link_libraries(${_target}
     PUBLIC
         ${FMILIB_LIBRARIES}
         "libzip::libzip"
+        "Folly::folly"
+        "Folly::folly_deps"
         "Boost::boost"
         "Boost::filesystem"
         "Boost::program_options"

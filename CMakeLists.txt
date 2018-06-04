@@ -151,6 +151,9 @@ find_package (Boost
     REQUIRED
     COMPONENTS filesystem program_options random ${testBoostLibs}
 )
+find_package(glog CONFIG REQUIRED)
+find_package(gflags CONFIG REQUIRED)
+find_package(folly CONFIG REQUIRED)
 find_package (CPPZMQ REQUIRED)
 find_package (FMILIB REQUIRED)
 find_package (LIBZIP REQUIRED)

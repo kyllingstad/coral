@@ -1,0 +1,26 @@
+FROM debian:stretch
+MAINTAINER Lars T. Kyllingstad <lars.kyllingstad@sintef.no>
+
+RUN apt-get update && apt-get install -y \
+    cmake \
+    g++ \
+    git \
+    git-buildpackage \
+    doxygen \
+    protobuf-compiler
+
+RUN apt-get update && apt-get install -y \
+    libboost-dev \
+    libboost-chrono-dev \
+    libboost-filesystem-dev \
+    libboost-program-options-dev \
+    libboost-random-dev \
+    libboost-system-dev \
+    libboost-thread-dev \
+    libgtest-dev \
+    libprotobuf-dev \
+    libzip-dev \
+    libzmq3-dev
+
+VOLUME ["/mnt/src"]
+COPY build-all /usr/local/bin

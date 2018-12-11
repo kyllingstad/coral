@@ -1,0 +1,17 @@
+#!/bin/bash
+set -eu
+debianArch="$(dpkg --print-architecture)"
+pushd /mnt/src
+
+
+pushd debian-fmilib
+fmilibVersion="$(grep -m1 -o '[0-9]\+\.[0-9]\+\.[0-9]\+-[0-9]\+' debian/changelog)"
+gbp buildpackage -us -ui -uc
+popd
+dpkg -i libfmilib2*_${fmilibVersion}_${debianArch}.deb
+
+pushd coral
+gbp buildpackage -us -ui -uc
+popd
+
+popd
